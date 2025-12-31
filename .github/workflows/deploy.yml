@@ -1,0 +1,213 @@
+name: Deploy VytalMind Gateway
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Deployment mode'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - standalone
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose files
+        run: |
+          docker compose config > /dev/null
+          echo "✅ docker-compose.yml is valid"
+
+      - name: Validate docker-compose.shared.yml
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.shared.yml config > /dev/null
+          echo "✅ docker-compose.shared.yml is valid"
+
+      - name: Check required scripts exist
+        run: |
+          test -f scripts/setup.sh || (echo "❌ scripts/setup.sh not found" && exit 1)
+          test -f scripts/health-check.sh || (echo "❌ scripts/health-check.sh not found" && exit 1)
+          test -f scripts/teardown.sh || (echo "❌ scripts/teardown.sh not found" && exit 1)
+          echo "✅ All required scripts exist"
+
+      - name: Validate Envoy configurations
+        run: |
+          docker run --rm -v $(pwd)/edge:/config envoyproxy/envoy:v1.31-latest \
+            --mode validate -c /config/envoy.yaml
+          echo "✅ Edge Envoy config is valid"
+
+          docker run --rm -v $(pwd)/internal:/config envoyproxy/envoy:v1.31-latest \
+            --mode validate -c /config/envoy.yaml
+          echo "✅ Internal Envoy config is valid"
+
+  build:
+    name: Build Images
+    runs-on: self-hosted
+    needs: validate
+    strategy:
+      matrix:
+        component: [edge, internal]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.component }} image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.component }}
+          file: ./${{ matrix.component }}/Dockerfile
+          push: false
+          tags: vytalmind-gateway-${{ matrix.component }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/${{ matrix.component }}-image.tar
+
+      - name: Upload ${{ matrix.component }} image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.component }}-image
+          path: /tmp/${{ matrix.component }}-image.tar
+          retention-days: 1
+
+  deploy:
+    name: Deploy Gateway
+    runs-on: self-hosted
+    needs: build
+    environment:
+      name: development
+      url: https://gateway.vytalmind.local
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download edge image
+        uses: actions/download-artifact@v4
+        with:
+          name: edge-image
+          path: /tmp
+
+      - name: Download internal image
+        uses: actions/download-artifact@v4
+        with:
+          name: internal-image
+          path: /tmp
+
+      - name: Load Docker images
+        run: |
+          docker load --input /tmp/edge-image.tar
+          docker load --input /tmp/internal-image.tar
+
+      - name: Configure deployment environment
+        run: |
+          cp .env.example .env
+
+          # Set Vault credentials from secrets
+          sed -i "s|EDGE_VAULT_ROLE_ID=.*|EDGE_VAULT_ROLE_ID=${{ secrets.EDGE_VAULT_ROLE_ID }}|" .env
+          sed -i "s|EDGE_VAULT_SECRET_ID=.*|EDGE_VAULT_SECRET_ID=${{ secrets.EDGE_VAULT_SECRET_ID }}|" .env
+          sed -i "s|INTERNAL_VAULT_ROLE_ID=.*|INTERNAL_VAULT_ROLE_ID=${{ secrets.INTERNAL_VAULT_ROLE_ID }}|" .env
+          sed -i "s|INTERNAL_VAULT_SECRET_ID=.*|INTERNAL_VAULT_SECRET_ID=${{ secrets.INTERNAL_VAULT_SECRET_ID }}|" .env
+
+          # Set Keycloak configuration
+          sed -i "s|KEYCLOAK_URL=.*|KEYCLOAK_URL=${{ secrets.KEYCLOAK_URL }}|" .env
+          sed -i "s|KEYCLOAK_CLIENT_SECRET=.*|KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}|" .env
+
+          # Set deployment mode
+          sed -i "s|DEPLOYMENT_MODE=.*|DEPLOYMENT_MODE=${{ github.event.inputs.mode || 'production' }}|" .env
+
+      - name: Deploy services
+        run: |
+          chmod +x scripts/*.sh
+          chmod +x edge/config/bootstrap/*.sh
+          chmod +x internal/config/bootstrap/*.sh
+          chmod +x internal/config/*.sh
+
+          if [ "${{ github.event.inputs.mode }}" = "standalone" ]; then
+            make start-standalone
+          else
+            make start
+          fi
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+
+          max_attempts=12
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            if make health 2>&1 | grep -q "✅"; then
+              echo "✅ All services are healthy"
+              exit 0
+            fi
+
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt/$max_attempts - Services not ready yet..."
+            sleep 10
+          done
+
+          echo "❌ Services failed to become healthy"
+          docker compose logs
+          exit 1
+
+      - name: Run smoke tests
+        run: |
+          # Test Edge Envoy admin endpoint
+          curl -f http://localhost:9901/ready || (echo "❌ Edge Envoy not ready" && exit 1)
+          echo "✅ Edge Envoy is ready"
+
+          # Test Internal Envoy admin endpoint
+          curl -f http://localhost:9902/ready || (echo "❌ Internal Envoy not ready" && exit 1)
+          echo "✅ Internal Envoy is ready"
+
+          # Test Redis
+          docker exec redis redis-cli ping || (echo "❌ Redis not responding" && exit 1)
+          echo "✅ Redis is responding"
+
+      - name: Collect deployment logs
+        if: always()
+        run: |
+          mkdir -p deployment-logs
+          docker compose logs > deployment-logs/all-services.log
+          docker compose logs edge-envoy > deployment-logs/edge-envoy.log
+          docker compose logs internal-envoy > deployment-logs/internal-envoy.log
+          docker compose logs vault-agent > deployment-logs/vault-agent.log
+          docker compose logs redis > deployment-logs/redis.log
+
+      - name: Upload deployment logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs-${{ github.run_number }}
+          path: deployment-logs/
+          retention-days: 30
+
+      - name: Post-deployment notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Gateway deployment successful!"
+          else
+            echo "❌ Gateway deployment failed!"
+          fi

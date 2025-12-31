@@ -91,51 +91,6 @@
     }
   },
 
-  "users": [
-    {
-      "username": "testuser",
-      "enabled": true,
-      "email": "test@vytalmind.local",
-      "firstName": "Test",
-      "lastName": "User",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "password123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": ["user"],
-      "clientRoles": {
-        "edge-gateway": ["api-read", "api-write"]
-      },
-      "attributes": {
-        "tenant_id": ["tenant-001"]
-      }
-    },
-    {
-      "username": "admin",
-      "enabled": true,
-      "email": "admin@vytalmind.local",
-      "firstName": "Admin",
-      "lastName": "User",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "admin123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": ["admin", "premium"],
-      "clientRoles": {
-        "edge-gateway": ["api-read", "api-write"]
-      },
-      "attributes": {
-        "tenant_id": ["tenant-admin"]
-      }
-    }
-  ],
-
   "groups": [
     {
       "name": "engineering",
