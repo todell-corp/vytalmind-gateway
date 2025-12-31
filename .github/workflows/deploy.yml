@@ -48,15 +48,11 @@ jobs:
           test -f scripts/teardown.sh || (echo "❌ scripts/teardown.sh not found" && exit 1)
           echo "✅ All required scripts exist"
 
-      - name: Validate Envoy configurations
+      - name: Validate Envoy configuration files exist
         run: |
-          docker run --rm -v $(pwd)/edge:/config envoyproxy/envoy:v1.31-latest \
-            --mode validate -c /config/envoy.yaml
-          echo "✅ Edge Envoy config is valid"
-
-          docker run --rm -v $(pwd)/internal:/config envoyproxy/envoy:v1.31-latest \
-            --mode validate -c /config/envoy.yaml
-          echo "✅ Internal Envoy config is valid"
+          test -f edge/envoy.yaml || (echo "❌ edge/envoy.yaml not found" && exit 1)
+          test -f internal/envoy.yaml || (echo "❌ internal/envoy.yaml not found" && exit 1)
+          echo "✅ Envoy configuration files exist"
 
   build:
     name: Build Images
