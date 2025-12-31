@@ -38,6 +38,22 @@ Internet → Edge Envoy (TLS/JWT) → Internal Envoy (mTLS) → Backend Services
 - **Prometheus** at https://prometheus.odell.com (for metrics)
 - 4GB available RAM
 
+## Deployment Modes
+
+This gateway supports two deployment modes:
+
+1. **Production Mode** (recommended): Core gateway + external shared services
+   - Deploys: Edge Envoy, Internal Envoy, Redis
+   - Uses external: Vault, Prometheus, Keycloak, OpenTelemetry
+   - Command: `docker compose up -d`
+
+2. **Standalone Mode** (development/testing): All services deployed locally
+   - Deploys: Core gateway + Keycloak + OpenTelemetry + Jaeger
+   - Uses external: Vault, Prometheus (still required)
+   - Command: `docker compose -f docker-compose.yml -f docker-compose.shared.yml up -d`
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed comparison.
+
 ## Quick Start
 
 ### 1. Vault PKI Setup (One-Time)
@@ -70,7 +86,7 @@ cp .env.example .env
 nano .env
 ```
 
-Update these values in `.env`:
+Update these required values in `.env`:
 ```env
 EDGE_VAULT_ROLE_ID=<from vault-setup output>
 EDGE_VAULT_SECRET_ID=<from vault-setup output>
@@ -78,11 +94,33 @@ INTERNAL_VAULT_ROLE_ID=<from vault-setup output>
 INTERNAL_VAULT_SECRET_ID=<from vault-setup output>
 ```
 
+**For external services** (production mode), also update:
+```env
+KEYCLOAK_URL=https://keycloak.odell.com
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.odell.com:4317
+```
+
 ### 3. Start the Gateway
 
+**Production Mode** (uses external Keycloak and OTel):
 ```bash
 # Run the setup script
 make setup
+
+# Or manually:
+docker compose up -d
+
+# Verify all services are healthy
+make health
+```
+
+**Standalone Mode** (deploys Keycloak and OTel locally):
+```bash
+# Deploy with shared services
+make setup-standalone
+
+# Or manually:
+docker compose -f docker-compose.yml -f docker-compose.shared.yml up -d
 
 # Verify all services are healthy
 make health

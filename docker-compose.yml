@@ -38,27 +38,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Keycloak - OAuth/JWT Provider
-  keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    container_name: keycloak
-    ports:
-      - "8080:8080"
-    environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      KC_DB: dev-file
-    volumes:
-      - keycloak-data:/opt/keycloak/data
-      - ./infrastructure/keycloak/realm-config.json:/opt/keycloak/data/import/realm.json
-    networks:
-      - edge-network
-    command: start-dev --import-realm
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
   # Edge Envoy - External Gateway with TLS Termination
   edge-envoy:
@@ -69,8 +48,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      keycloak:
-        condition: service_healthy
+      # Remove keycloak dependency if using external Keycloak
     ports:
       - "443:10000"   # HTTPS listener
       - "9901:9901"   # Admin interface
@@ -121,20 +99,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # OpenTelemetry Collector - Distributed Tracing
-  otel-collector:
-    image: otel/opentelemetry-collector:latest
-    container_name: otel-collector
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-    volumes:
-      - ./infrastructure/otel-collector/otel-config.yaml:/etc/otel-collector-config.yaml:ro
-    networks:
-      - monitoring
-      - edge-network
-      - internal-network
-    command: ["--config=/etc/otel-collector-config.yaml"]
 
   # Example Backend Service (without mTLS) - for direct edge routing
   backend-simple:
