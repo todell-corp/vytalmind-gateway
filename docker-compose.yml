@@ -78,8 +78,8 @@ services:
         condition: service_healthy
       # Remove keycloak dependency if using external Keycloak
     ports:
-      - "443:10000"   # HTTPS listener
-      - "9901:9901"   # Admin interface
+      - "192.168.50.80:443:10000"   # HTTPS listener
+      - "192.168.50.80:9901:9901"   # Admin interface
     environment:
       ENVOY_UID: 0
     volumes:
@@ -107,7 +107,8 @@ services:
       vault-agent:
         condition: service_healthy
     ports:
-      - "9902:9901"   # Admin interface (different port)
+      - "192.168.50.122:10000:10000"  # mTLS listener
+      - "192.168.50.122:9901:9901"    # Admin interface
     environment:
       ENVOY_UID: 0
     volumes:
