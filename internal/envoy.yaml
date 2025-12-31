@@ -12,6 +12,19 @@ admin:
         "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
         path: /var/log/envoy/admin-access.log
 
+# DNS Resolution Configuration - Use internal DNS server
+typed_dns_resolver_config:
+  name: envoy.network.dns_resolver.cares
+  typed_config:
+    "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
+    resolvers:
+      - socket_address:
+          address: 192.168.50.160
+          port_value: 53
+    dns_resolver_options:
+      use_tcp_for_dns_lookups: false
+      no_default_search_domain: false
+
 static_resources:
   listeners:
     # mTLS Listener - Internal Gateway Entry Point
@@ -99,12 +112,12 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - certificate_chain:
-                      filename: /etc/envoy/certs/server.crt
+                      filename: /etc/envoy/certs/internal/server.crt
                     private_key:
-                      filename: /etc/envoy/certs/server.key
+                      filename: /etc/envoy/certs/internal/server.key
                 validation_context:
                   trusted_ca:
-                    filename: /etc/envoy/certs/ca.crt
+                    filename: /etc/envoy/certs/internal/ca.crt
 
   clusters:
     # Backend Secure Service - without mTLS for now (can be enabled later)

@@ -18,8 +18,34 @@ networks:
 volumes:
   redis-data:
   keycloak-data:
+  vault-certs:
 
 services:
+  # Vault Agent - Certificate Management for Edge and Internal Envoy
+  vault-agent:
+    image: hashicorp/vault:1.16
+    container_name: vault-agent
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
+      EDGE_VAULT_ROLE_ID: ${EDGE_VAULT_ROLE_ID}
+      EDGE_VAULT_SECRET_ID: ${EDGE_VAULT_SECRET_ID}
+      INTERNAL_VAULT_ROLE_ID: ${INTERNAL_VAULT_ROLE_ID}
+      INTERNAL_VAULT_SECRET_ID: ${INTERNAL_VAULT_SECRET_ID}
+    volumes:
+      - vault-certs:/vault/certs
+      - ./infrastructure/vault-agent:/vault/config
+    networks:
+      - edge-network
+      - internal-network
+    entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
+    command: agent -config=/vault/config/agent.hcl
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -f /vault/certs/edge/server.crt && test -f /vault/certs/internal/server.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Redis - Distributed Rate Limiting
   redis:
     image: redis:7-alpine
@@ -48,19 +74,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      vault-agent:
+        condition: service_healthy
       # Remove keycloak dependency if using external Keycloak
     ports:
       - "443:10000"   # HTTPS listener
       - "9901:9901"   # Admin interface
     environment:
       ENVOY_UID: 0
-      VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
-      VAULT_ROLE_ID: ${EDGE_VAULT_ROLE_ID}
-      VAULT_SECRET_ID: ${EDGE_VAULT_SECRET_ID}
     volumes:
       - ./edge/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./edge/config:/etc/envoy/config:ro
-      - ./edge/certs:/etc/envoy/certs
+      - vault-certs:/etc/envoy/certs:ro
       - ./edge/logs:/var/log/envoy
     networks:
       - edge-network
@@ -78,17 +103,17 @@ services:
       context: ./internal
       dockerfile: Dockerfile
     container_name: internal-envoy
+    depends_on:
+      vault-agent:
+        condition: service_healthy
     ports:
       - "9902:9901"   # Admin interface (different port)
     environment:
       ENVOY_UID: 0
-      VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
-      VAULT_ROLE_ID: ${INTERNAL_VAULT_ROLE_ID}
-      VAULT_SECRET_ID: ${INTERNAL_VAULT_SECRET_ID}
     volumes:
       - ./internal/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./internal/config:/etc/envoy/config:ro
-      - ./internal/certs:/etc/envoy/certs
+      - vault-certs:/etc/envoy/certs:ro
       - ./internal/logs:/var/log/envoy
     networks:
       - internal-network  # Only internal network - zero trust
