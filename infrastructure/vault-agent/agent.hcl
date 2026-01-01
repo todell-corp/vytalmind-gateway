@@ -104,7 +104,7 @@ template {
 
 # Vault configuration
 vault {
-  address = env("VAULT_ADDR")
+  address = "https://vault.odell.com:8200"
 
   # Skip TLS verification for self-signed certs (adjust for production)
   tls_skip_verify = true
