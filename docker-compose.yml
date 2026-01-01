@@ -35,7 +35,7 @@ services:
     command: agent -config=/vault/config/agent.hcl
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /vault/certs/edge-server.crt && test -f /vault/certs/internal-server.crt && test -f /vault/certs/apicurio-server.crt"]
+      test: ["CMD", "sh", "-c", "test -f /tmp/vault-token && pgrep -f 'vault agent'"]
       interval: 10s
       timeout: 5s
       retries: 5
