@@ -1,1 +1,1 @@
-{{ with secret "pki-intermediate/issue/internal-services" "common_name=internal-envoy-client.vytalmind.local" "ttl=720h" "uri_sans=spiffe://vytalmind.local/service/internal-envoy-client" }}{{ .Data.private_key }}{{ end }}
+{{ with secret "pki-intermediate/issue/internal-services" "common_name=gateway-internal.odell.com" "ttl=720h" "ip_sans=192.168.50.122" "uri_sans=spiffe://odell.com/service/internal-envoy-client" }}{{ .Data.private_key }}{{ end }}
