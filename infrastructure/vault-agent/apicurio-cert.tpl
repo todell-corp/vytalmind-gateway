@@ -1,1 +1,0 @@
-{{ with secret "pki-intermediate/issue/internal-services" "common_name=apicurio.odell.com" "ttl=720h" "ip_sans=192.168.50.122" }}{{ .Data.certificate }}{{ end }}

@@ -12,24 +12,44 @@ networks:
 volumes:
   redis-data:
   keycloak-data:
-  vault-certs:
+  edge-certs:      # Edge TLS certificates (managed by edge-vault-agent)
+  internal-certs:  # Internal mTLS + Apicurio certificates (managed by internal-vault-agent)
 
 services:
-  # Vault Agent - Certificate Management for Edge and Internal Envoy
-  vault-agent:
+  # Edge Vault Agent - Manages Edge TLS Certificates
+  edge-vault-agent:
     image: hashicorp/vault:1.16
-    container_name: vault-agent
+    container_name: edge-vault-agent
     environment:
       VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
       EDGE_VAULT_ROLE_ID: ${EDGE_VAULT_ROLE_ID}
       EDGE_VAULT_SECRET_ID: ${EDGE_VAULT_SECRET_ID}
+    volumes:
+      - edge-certs:/vault/certs
+      - ./infrastructure/vault-agent-edge:/vault/config:ro
+    networks:
+      - edge-network
+    entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
+    command: agent -config=/vault/config/agent.hcl
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -f /tmp/vault-token && pgrep -f 'vault agent'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Internal Vault Agent - Manages Internal mTLS + Apicurio Certificates
+  internal-vault-agent:
+    image: hashicorp/vault:1.16
+    container_name: internal-vault-agent
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
       INTERNAL_VAULT_ROLE_ID: ${INTERNAL_VAULT_ROLE_ID}
       INTERNAL_VAULT_SECRET_ID: ${INTERNAL_VAULT_SECRET_ID}
     volumes:
-      - vault-certs:/vault/certs
-      - ./infrastructure/vault-agent:/vault/config
+      - internal-certs:/vault/certs
+      - ./infrastructure/vault-agent-internal:/vault/config:ro
     networks:
-      - edge-network
       - internal-network
     entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
     command: agent -config=/vault/config/agent.hcl
@@ -68,7 +88,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      vault-agent:
+      edge-vault-agent:
         condition: service_healthy
       # Remove keycloak dependency if using external Keycloak
     ports:
@@ -79,7 +99,7 @@ services:
     volumes:
       - ./edge/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./edge/config:/etc/envoy/config:ro
-      - vault-certs:/etc/envoy/certs:ro
+      - edge-certs:/etc/envoy/certs:ro
       - ./edge/logs:/var/log/envoy
     networks:
       - edge-network
@@ -98,7 +118,7 @@ services:
       dockerfile: Dockerfile
     container_name: internal-envoy
     depends_on:
-      vault-agent:
+      internal-vault-agent:
         condition: service_healthy
     ports:
       - "192.168.50.122:443:443"      # HTTPS listener (SNI-based routing)
@@ -108,7 +128,7 @@ services:
     volumes:
       - ./internal/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./internal/config:/etc/envoy/config:ro
-      - vault-certs:/etc/envoy/certs:ro
+      - internal-certs:/etc/envoy/certs:ro
       - ./internal/logs:/var/log/envoy
     networks:
       - internal-network  # Only internal network - zero trust

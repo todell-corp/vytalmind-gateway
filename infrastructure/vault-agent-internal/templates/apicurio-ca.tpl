@@ -1,0 +1,1 @@
+{{ with secret "pki_int/issue/internal-service" "common_name=apicurio.odell.com" "ttl=720h" "ip_sans=192.168.50.122" }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}

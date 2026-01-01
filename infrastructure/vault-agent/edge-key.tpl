@@ -1,1 +1,0 @@
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=gateway-edge.odell.com" "ttl=8760h" "ip_sans=127.0.0.1,192.168.50.80" }}{{ .Data.private_key }}{{ end }}

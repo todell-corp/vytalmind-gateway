@@ -1,0 +1,1 @@
+{{ with secret "pki_int/issue/internal-service" "common_name=gateway-internal.odell.com" "ttl=720h" "ip_sans=192.168.50.122" "uri_sans=spiffe://odell.com/service/internal-envoy-client" }}{{ .Data.private_key }}{{ end }}

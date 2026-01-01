@@ -107,18 +107,32 @@ echo $TOKEN | cut -d. -f2 | base64 -d | jq '.aud'
 ```
 pki/ (Root PKI)
 ├─ Edge TLS certificates (TTL: 8760h / 1 year)
-└─ Issued to: gateway.vytalmind.local
+├─ Issued to: gateway.vytalmind.local
+└─ Managed by: edge-vault-agent (AppRole: edge-envoy)
 
 pki_int/ (Intermediate PKI)
 ├─ Internal mTLS certificates (TTL: 720h / 30 days)
-├─ SPIFFE URIs: spiffe://vytalmind.local/service/*
-└─ Issued to: internal-envoy, backend services
+├─ SPIFFE URIs: spiffe://odell.com/service/*
+├─ Issued to: internal-envoy, backend services, Apicurio
+└─ Managed by: internal-vault-agent (AppRole: internal-envoy)
 ```
 
+**Vault Agent Sidecar Architecture:**
+- **Edge Vault Agent**: Dedicated sidecar container managing Edge TLS certificates only
+  - Uses Edge AppRole credentials (least privilege: access to `pki/` only)
+  - Writes to `edge-certs` Docker volume
+  - Auto-renews certificates before expiration
+- **Internal Vault Agent**: Dedicated sidecar container managing Internal mTLS + Apicurio certificates
+  - Uses Internal AppRole credentials (least privilege: access to `pki_int/` only)
+  - Writes to `internal-certs` Docker volume
+  - Manages 8 certificate files (5 internal mTLS + 3 Apicurio)
+  - Auto-renews certificates before expiration
+
 **Certificate Rotation:**
-- Edge TLS: Auto-renewed every 23 hours
-- Internal mTLS: Auto-renewed every 24 days
-- Bootstrap scripts handle rotation automatically
+- Edge TLS: Auto-renewed by edge-vault-agent (Vault Agent default: check every 5 minutes)
+- Internal mTLS: Auto-renewed by internal-vault-agent
+- No manual intervention required - Vault Agent handles renewals automatically
+- Each Envoy reads certificates from its dedicated volume (read-only mount)
 
 ### Deployment Modes
 
@@ -165,6 +179,10 @@ make logs               # All logs (follow mode)
 make logs-edge          # Edge Envoy only
 make logs-internal      # Internal Envoy only
 
+# Vault Agent sidecar logs
+docker logs -f edge-vault-agent          # Edge certificate management
+docker logs -f internal-vault-agent      # Internal certificate management
+
 # View access logs (JSON formatted)
 tail -f edge/logs/access.log | jq
 tail -f internal/logs/access.log | jq
@@ -207,12 +225,25 @@ vault policy read internal-envoy
 ### Certificate Operations
 
 ```bash
-# View certificates
-openssl x509 -in edge/certs/server.crt -noout -text
-openssl x509 -in internal/certs/server.crt -noout -text
+# View certificates from Vault Agent volumes
+docker exec edge-vault-agent ls -la /vault/certs/
+docker exec internal-vault-agent ls -la /vault/certs/
 
-# Force certificate renewal
-docker compose restart edge-envoy internal-envoy
+# View certificates from Envoy containers
+docker exec edge-envoy ls -la /etc/envoy/certs/
+docker exec internal-envoy ls -la /etc/envoy/certs/
+
+# Inspect certificate details
+docker exec edge-envoy openssl x509 -in /etc/envoy/certs/edge-server.crt -noout -text
+docker exec internal-envoy openssl x509 -in /etc/envoy/certs/internal-server.crt -noout -text
+
+# Force certificate renewal (restart Vault Agent sidecars)
+docker compose restart edge-vault-agent internal-vault-agent
+
+# Verify certificate files exist
+docker exec edge-envoy sh -c "ls -la /etc/envoy/certs/ | grep edge-"
+docker exec internal-envoy sh -c "ls -la /etc/envoy/certs/ | grep internal-"
+docker exec internal-envoy sh -c "ls -la /etc/envoy/certs/ | grep apicurio-"
 ```
 
 ### Envoy Admin Interface
@@ -442,8 +473,10 @@ make restart
 |---------|-----|---------|
 | Edge Gateway | https://localhost:443 | Main HTTPS entry point |
 | Edge Admin | http://localhost:9901 | Envoy admin/metrics |
+| Edge Vault Agent | (internal) | Certificate management for Edge TLS |
 | Internal Gateway | http://internal-envoy:10000 | Internal mTLS proxy (from containers) |
 | Internal Admin | http://localhost:9902 | Envoy admin/metrics |
+| Internal Vault Agent | (internal) | Certificate management for Internal mTLS + Apicurio |
 | Keycloak (standalone) | http://localhost:8080 | OAuth/JWT provider |
 | Vault (external) | https://vault.odell.com:8200 | PKI and secrets |
 | Prometheus (external) | https://prometheus.odell.com | Metrics collection |
@@ -456,12 +489,22 @@ make restart
 # Check container logs
 docker compose logs edge-envoy
 docker compose logs internal-envoy
+docker compose logs edge-vault-agent
+docker compose logs internal-vault-agent
 
-# Verify Vault connectivity
-docker exec edge-envoy curl -k https://vault.odell.com:8200/v1/sys/health
+# Verify Vault Agent health
+docker ps | grep vault-agent
+docker compose ps edge-vault-agent internal-vault-agent
+
+# Verify Vault connectivity from Vault Agent containers
+docker exec edge-vault-agent curl -k https://vault.odell.com:8200/v1/sys/health
+docker exec internal-vault-agent curl -k https://vault.odell.com:8200/v1/sys/health
 
 # Check certificates were fetched
-ls -la edge/certs/ internal/certs/
+docker exec edge-vault-agent ls -la /vault/certs/
+docker exec internal-vault-agent ls -la /vault/certs/
+docker exec edge-envoy ls -la /etc/envoy/certs/
+docker exec internal-envoy ls -la /etc/envoy/certs/
 ```
 
 ### JWT Validation Failing
@@ -494,11 +537,24 @@ curl http://localhost:9901/config_dump | jq '.configs[].dynamic_listeners[].acti
 # Test Vault AppRole credentials
 cat .env | grep VAULT
 
-# Manually trigger certificate refresh
-docker compose restart edge-envoy internal-envoy
+# Check Vault Agent logs for errors
+docker logs edge-vault-agent
+docker logs internal-vault-agent
+
+# Verify Vault Agent can authenticate
+docker exec edge-vault-agent cat /tmp/vault-token
+docker exec internal-vault-agent cat /tmp/vault-token
+
+# Manually trigger certificate refresh (restart Vault Agent sidecars)
+docker compose restart edge-vault-agent internal-vault-agent
 
 # Check certificate expiration
-openssl x509 -in edge/certs/server.crt -noout -dates
+docker exec edge-envoy openssl x509 -in /etc/envoy/certs/edge-server.crt -noout -dates
+docker exec internal-envoy openssl x509 -in /etc/envoy/certs/internal-server.crt -noout -dates
+
+# Verify certificate files exist in volumes
+docker exec edge-vault-agent ls -la /vault/certs/
+docker exec internal-vault-agent ls -la /vault/certs/
 ```
 
 ### Routing Issues
