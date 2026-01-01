@@ -1,1 +1,1 @@
-{{ with secret "pki_int/issue/internal-service" "common_name=internal-envoy-client.vytalmind.local" "ttl=720h" "uri_sans=spiffe://vytalmind.local/service/internal-envoy-client" }}{{ .Data.certificate }}{{ end }}
+{{ with secret "pki-intermediate/issue/internal-services" "common_name=internal-envoy-client.vytalmind.local" "ttl=720h" "uri_sans=spiffe://vytalmind.local/service/internal-envoy-client" }}{{ .Data.certificate }}{{ end }}

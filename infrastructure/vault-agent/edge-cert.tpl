@@ -1,1 +1,1 @@
-{{ with secret "pki/issue/edge-gateway" "common_name=gateway.vytalmind.local" "ttl=8760h" "alt_names=edge-envoy,localhost" "ip_sans=127.0.0.1" }}{{ .Data.certificate }}{{ end }}
+{{ with secret "pki-edge/issue/edge-gateway" "common_name=gateway.vytalmind.local" "ttl=8760h" "alt_names=edge-envoy,localhost" "ip_sans=127.0.0.1" }}{{ .Data.certificate }}{{ end }}
