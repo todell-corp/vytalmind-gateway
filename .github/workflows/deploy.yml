@@ -131,6 +131,16 @@ jobs:
           # Set deployment mode
           sed -i "s|DEPLOYMENT_MODE=.*|DEPLOYMENT_MODE=${{ github.event.inputs.mode || 'production' }}|" .env
 
+      - name: Check existing deployment
+        run: |
+          echo "🔍 Checking for existing deployment..."
+          if docker compose ps -q | grep -q .; then
+            echo "⚠️ Existing deployment found - will perform rolling update"
+            docker compose ps
+          else
+            echo "✅ No existing deployment - will perform fresh deployment"
+          fi
+
       - name: Deploy services
         run: |
           chmod +x scripts/*.sh
@@ -138,11 +148,18 @@ jobs:
           chmod +x internal/config/bootstrap/*.sh
           chmod +x internal/config/*.sh
 
+          echo "🚀 Deploying gateway services..."
+
           if [ "${{ github.event.inputs.mode }}" = "standalone" ]; then
-            make start-standalone
+            # Standalone mode: use docker-compose.shared.yml
+            docker compose -f docker-compose.yml -f docker-compose.shared.yml up -d --build --remove-orphans
           else
-            make start
+            # Production mode: use main docker-compose.yml
+            docker compose up -d --build --remove-orphans
           fi
+
+          echo "✅ Services deployment initiated"
+          docker compose ps
 
       - name: Wait for services to be healthy
         run: |

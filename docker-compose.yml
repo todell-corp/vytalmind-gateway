@@ -5,13 +5,13 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/24
+        - subnet: 172.22.0.0/24
   internal-network:
     driver: bridge
     internal: true  # No external access - zero trust boundary
     ipam:
       config:
-        - subnet: 172.21.0.0/24
+        - subnet: 172.23.0.0/24
   monitoring:
     driver: bridge
 
