@@ -187,12 +187,12 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - certificate_chain:
-                      filename: /etc/envoy/certs/edge/server.crt
+                      filename: /etc/envoy/certs/edge-server.crt
                     private_key:
-                      filename: /etc/envoy/certs/edge/server.key
+                      filename: /etc/envoy/certs/edge-server.key
                 validation_context:
                   trusted_ca:
-                    filename: /etc/envoy/certs/edge/ca.crt
+                    filename: /etc/envoy/certs/edge-ca.crt
                 alpn_protocols: ["h2", "http/1.1"]
 
   # Upstream Clusters

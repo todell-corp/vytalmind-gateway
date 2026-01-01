@@ -35,7 +35,7 @@ services:
     command: agent -config=/vault/config/agent.hcl
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /vault/certs/edge/server.crt && test -f /vault/certs/internal/server.crt"]
+      test: ["CMD", "sh", "-c", "test -f /vault/certs/edge-server.crt && test -f /vault/certs/internal-server.crt && test -f /vault/certs/apicurio-server.crt"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -101,8 +101,8 @@ services:
       vault-agent:
         condition: service_healthy
     ports:
-      - "192.168.50.122:10000:10000"  # mTLS listener
-      - "192.168.50.122:9901:9901"    # Admin interface
+      - "192.168.50.122:443:443"      # HTTPS listener (SNI-based routing)
+      - "192.168.50.122:9902:9901"    # Admin interface
     environment:
       ENVOY_UID: 0
     volumes:

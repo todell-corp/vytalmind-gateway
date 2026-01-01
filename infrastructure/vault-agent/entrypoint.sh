@@ -6,8 +6,8 @@ set -e
 
 echo "Initializing Vault Agent..."
 
-# Create certificate directories
-mkdir -p /vault/certs/edge /vault/certs/internal
+# Create certificate directory
+mkdir -p /vault/certs
 
 # Write Edge AppRole credentials to /tmp (not mounted volume)
 echo "$EDGE_VAULT_ROLE_ID" > /tmp/edge-role-id

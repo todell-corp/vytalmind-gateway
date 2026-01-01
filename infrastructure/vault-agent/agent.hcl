@@ -31,33 +31,33 @@ auto_auth {
 # Template for Edge TLS Certificate
 template {
   source      = "/vault/config/edge-cert.tpl"
-  destination = "/vault/certs/edge/server.crt"
+  destination = "/vault/certs/edge-server.crt"
   command     = "echo 'Edge certificate updated'"
 }
 
 template {
   source      = "/vault/config/edge-key.tpl"
-  destination = "/vault/certs/edge/server.key"
+  destination = "/vault/certs/edge-server.key"
   perms       = "0600"
   command     = "echo 'Edge key updated'"
 }
 
 template {
   source      = "/vault/config/edge-ca.tpl"
-  destination = "/vault/certs/edge/ca.crt"
+  destination = "/vault/certs/edge-ca.crt"
   command     = "echo 'Edge CA updated'"
 }
 
 # Template for Internal mTLS Server Certificate
 template {
   source      = "/vault/config/internal-server-cert.tpl"
-  destination = "/vault/certs/internal/server.crt"
+  destination = "/vault/certs/internal-server.crt"
   command     = "echo 'Internal server certificate updated'"
 }
 
 template {
   source      = "/vault/config/internal-server-key.tpl"
-  destination = "/vault/certs/internal/server.key"
+  destination = "/vault/certs/internal-server.key"
   perms       = "0600"
   command     = "echo 'Internal server key updated'"
 }
@@ -65,21 +65,41 @@ template {
 # Template for Internal mTLS Client Certificate
 template {
   source      = "/vault/config/internal-client-cert.tpl"
-  destination = "/vault/certs/internal/client.crt"
+  destination = "/vault/certs/internal-client.crt"
   command     = "echo 'Internal client certificate updated'"
 }
 
 template {
   source      = "/vault/config/internal-client-key.tpl"
-  destination = "/vault/certs/internal/client.key"
+  destination = "/vault/certs/internal-client.key"
   perms       = "0600"
   command     = "echo 'Internal client key updated'"
 }
 
 template {
   source      = "/vault/config/internal-ca.tpl"
-  destination = "/vault/certs/internal/ca.crt"
+  destination = "/vault/certs/internal-ca.crt"
   command     = "echo 'Internal CA updated'"
+}
+
+# Template for Apicurio Registry Certificate
+template {
+  source      = "/vault/config/apicurio-cert.tpl"
+  destination = "/vault/certs/apicurio-server.crt"
+  command     = "echo 'Apicurio certificate updated'"
+}
+
+template {
+  source      = "/vault/config/apicurio-key.tpl"
+  destination = "/vault/certs/apicurio-server.key"
+  perms       = "0600"
+  command     = "echo 'Apicurio key updated'"
+}
+
+template {
+  source      = "/vault/config/apicurio-ca.tpl"
+  destination = "/vault/certs/apicurio-ca.crt"
+  command     = "echo 'Apicurio CA updated'"
 }
 
 # Vault configuration
