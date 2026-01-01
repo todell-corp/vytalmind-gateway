@@ -92,7 +92,7 @@ static_resources:
                         keycloak:
                           issuer: http://keycloak.odell.com:8080/realms/ventusmind
                           audiences:
-                            - apicurio
+                            - apicurio-registry
                           remote_jwks:
                             http_uri:
                               uri: http://keycloak.odell.com:8080/realms/ventusmind/protocol/openid-connect/certs
