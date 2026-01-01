@@ -9,16 +9,12 @@ echo "Initializing Vault Agent..."
 # Create certificate directories
 mkdir -p /vault/certs/edge /vault/certs/internal
 
-# Write Edge AppRole credentials to files
-echo "$EDGE_VAULT_ROLE_ID" > /vault/config/edge-role-id
-echo "$EDGE_VAULT_SECRET_ID" > /vault/config/edge-secret-id
-
-# Write Internal AppRole credentials to files
-echo "$INTERNAL_VAULT_ROLE_ID" > /vault/config/internal-role-id
-echo "$INTERNAL_VAULT_SECRET_ID" > /vault/config/internal-secret-id
+# Write Edge AppRole credentials to /tmp (not mounted volume)
+echo "$EDGE_VAULT_ROLE_ID" > /tmp/edge-role-id
+echo "$EDGE_VAULT_SECRET_ID" > /tmp/edge-secret-id
 
 # Set proper permissions
-chmod 600 /vault/config/*-role-id /vault/config/*-secret-id
+chmod 600 /tmp/edge-role-id /tmp/edge-secret-id
 
 echo "Starting Vault Agent with configuration at /vault/config/agent.hcl"
 

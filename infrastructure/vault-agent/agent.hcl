@@ -14,8 +14,8 @@ auto_auth {
     namespace = ""
 
     config = {
-      role_id_file_path = "/vault/config/edge-role-id"
-      secret_id_file_path = "/vault/config/edge-secret-id"
+      role_id_file_path = "/tmp/edge-role-id"
+      secret_id_file_path = "/tmp/edge-secret-id"
       remove_secret_id_file_after_reading = false
     }
   }
