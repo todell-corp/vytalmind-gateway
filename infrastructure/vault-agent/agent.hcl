@@ -7,7 +7,7 @@ exit_after_auth = false
 # PID file for management
 pid_file = "/tmp/vault-agent.pid"
 
-# Auto-auth configurations for both Edge and Internal roles
+# Auto-auth configuration using Edge AppRole (has access to both PKIs)
 auto_auth {
   method {
     type = "approle"
@@ -23,27 +23,7 @@ auto_auth {
   sink {
     type = "file"
     config = {
-      path = "/tmp/vault-token-edge"
-    }
-  }
-}
-
-auto_auth {
-  method {
-    type = "approle"
-    namespace = ""
-
-    config = {
-      role_id_file_path = "/vault/config/internal-role-id"
-      secret_id_file_path = "/vault/config/internal-secret-id"
-      remove_secret_id_file_after_reading = false
-    }
-  }
-
-  sink {
-    type = "file"
-    config = {
-      path = "/tmp/vault-token-internal"
+      path = "/tmp/vault-token"
     }
   }
 }
