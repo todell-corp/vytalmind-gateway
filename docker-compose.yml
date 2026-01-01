@@ -3,15 +3,9 @@ version: '3.8'
 networks:
   edge-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.22.0.0/24
   internal-network:
     driver: bridge
     internal: true  # No external access - zero trust boundary
-    ipam:
-      config:
-        - subnet: 172.23.0.0/24
   monitoring:
     driver: bridge
 
