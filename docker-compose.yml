@@ -101,7 +101,7 @@ services:
         condition: service_healthy
       # Remove keycloak dependency if using external Keycloak
     ports:
-      - "192.168.50.80:443:10000"   # HTTPS listener
+      - "192.168.50.80:443:443"     # HTTPS listener
       - "192.168.50.80:9901:9901"   # Admin interface
     environment:
       ENVOY_UID: 0
@@ -131,7 +131,7 @@ services:
         condition: service_healthy
     ports:
       - "192.168.50.122:443:443"      # HTTPS listener (SNI-based routing)
-      - "192.168.50.122:9902:9901"    # Admin interface
+      - "192.168.50.122:9901:9901"    # Admin interface
     environment:
       ENVOY_UID: 0
     volumes:
