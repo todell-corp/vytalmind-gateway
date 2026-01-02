@@ -50,16 +50,14 @@ vault-setup:
 
 setup:
 	@chmod +x scripts/*.sh
-	@chmod +x edge/config/bootstrap/*.sh
-	@chmod +x internal/config/bootstrap/*.sh
-	@chmod +x internal/config/*.sh
+	@chmod +x infrastructure/vault-agent-edge/entrypoint.sh
+	@chmod +x infrastructure/vault-agent-internal/entrypoint.sh
 	@./scripts/setup.sh
 
 setup-standalone:
 	@chmod +x scripts/*.sh
-	@chmod +x edge/config/bootstrap/*.sh
-	@chmod +x internal/config/bootstrap/*.sh
-	@chmod +x internal/config/*.sh
+	@chmod +x infrastructure/vault-agent-edge/entrypoint.sh
+	@chmod +x infrastructure/vault-agent-internal/entrypoint.sh
 	@echo "🚀 Setting up in Standalone Mode (with local Keycloak & OTel)..."
 	@./scripts/setup.sh standalone
 

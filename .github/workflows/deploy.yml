@@ -144,9 +144,8 @@ jobs:
       - name: Deploy services
         run: |
           chmod +x scripts/*.sh
-          chmod +x edge/config/bootstrap/*.sh
-          chmod +x internal/config/bootstrap/*.sh
-          chmod +x internal/config/*.sh
+          chmod +x infrastructure/vault-agent-edge/entrypoint.sh
+          chmod +x infrastructure/vault-agent-internal/entrypoint.sh
 
           echo "🚀 Deploying gateway services..."
 
@@ -205,7 +204,8 @@ jobs:
           docker compose logs > deployment-logs/all-services.log
           docker compose logs edge-envoy > deployment-logs/edge-envoy.log
           docker compose logs internal-envoy > deployment-logs/internal-envoy.log
-          docker compose logs vault-agent > deployment-logs/vault-agent.log
+          docker compose logs edge-vault-agent > deployment-logs/edge-vault-agent.log
+          docker compose logs internal-vault-agent > deployment-logs/internal-vault-agent.log
           docker compose logs redis > deployment-logs/redis.log
 
       - name: Upload deployment logs
