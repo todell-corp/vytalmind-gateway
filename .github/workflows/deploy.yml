@@ -114,41 +114,13 @@ jobs:
           docker load --input /tmp/edge-image.tar
           docker load --input /tmp/internal-image.tar
 
-      - name: Configure deployment environment
-        env:
-          EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
-          EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
-          INTERNAL_VAULT_ROLE_ID: ${{ secrets.INTERNAL_VAULT_ROLE_ID }}
-          INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
-          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
-          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-          DEPLOYMENT_MODE: ${{ github.event.inputs.mode || 'production' }}
+      - name: Validate required secrets
         run: |
-          # Create .env from template
-          cp .env.example .env
-
-          # Validate required secrets are present
-          : "${EDGE_VAULT_ROLE_ID:?EDGE_VAULT_ROLE_ID secret not set}"
-          : "${EDGE_VAULT_SECRET_ID:?EDGE_VAULT_SECRET_ID secret not set}"
-          : "${INTERNAL_VAULT_ROLE_ID:?INTERNAL_VAULT_ROLE_ID secret not set}"
-          : "${INTERNAL_VAULT_SECRET_ID:?INTERNAL_VAULT_SECRET_ID secret not set}"
-
-          # Write secrets directly (no pattern matching)
-          cat >> .env <<EOF
-
-# ==============================================================================
-# SECRETS (Injected by GitHub Actions)
-# ==============================================================================
-EDGE_VAULT_ROLE_ID=${EDGE_VAULT_ROLE_ID}
-EDGE_VAULT_SECRET_ID=${EDGE_VAULT_SECRET_ID}
-INTERNAL_VAULT_ROLE_ID=${INTERNAL_VAULT_ROLE_ID}
-INTERNAL_VAULT_SECRET_ID=${INTERNAL_VAULT_SECRET_ID}
-KEYCLOAK_URL=${KEYCLOAK_URL}
-KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
-DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
-EOF
-
-          echo "✅ Environment configured successfully"
+          test -n "${{ secrets.EDGE_VAULT_ROLE_ID }}" || (echo "❌ EDGE_VAULT_ROLE_ID not set" && exit 1)
+          test -n "${{ secrets.EDGE_VAULT_SECRET_ID }}" || (echo "❌ EDGE_VAULT_SECRET_ID not set" && exit 1)
+          test -n "${{ secrets.INTERNAL_VAULT_ROLE_ID }}" || (echo "❌ INTERNAL_VAULT_ROLE_ID not set" && exit 1)
+          test -n "${{ secrets.INTERNAL_VAULT_SECRET_ID }}" || (echo "❌ INTERNAL_VAULT_SECRET_ID not set" && exit 1)
+          echo "✅ All required secrets are configured"
 
       - name: Check existing deployment
         run: |
@@ -161,6 +133,14 @@ EOF
           fi
 
       - name: Deploy services
+        env:
+          EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
+          EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
+          INTERNAL_VAULT_ROLE_ID: ${{ secrets.INTERNAL_VAULT_ROLE_ID }}
+          INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
+          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+          DEPLOYMENT_MODE: ${{ github.event.inputs.mode || 'production' }}
         run: |
           echo "🚀 Deploying gateway services..."
 
