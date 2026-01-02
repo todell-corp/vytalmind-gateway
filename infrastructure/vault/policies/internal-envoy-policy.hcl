@@ -2,17 +2,17 @@
 # Allows internal proxy to issue mTLS certificates from intermediate PKI
 
 # Issue mTLS certificates from intermediate PKI
-path "pki_int/issue/internal-service" {
+path "pki-intermediate/issue/internal-services" {
   capabilities = ["create", "update"]
 }
 
 # Read intermediate CA
-path "pki_int/cert/ca" {
+path "pki-intermediate/cert/ca" {
   capabilities = ["read"]
 }
 
 # Read root CA
-path "pki/cert/ca" {
+path "pki-root/cert/ca" {
   capabilities = ["read"]
 }
 
