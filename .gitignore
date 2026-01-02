@@ -48,6 +48,10 @@ temp/
 # Vault tokens
 .vault-token
 
+# OAuth2 Secrets (generated from GitHub Secrets during deployment)
+internal/config/token_secret.yaml
+internal/config/hmac_secret.yaml
+
 # Backup files
 *.bak
 *.backup
