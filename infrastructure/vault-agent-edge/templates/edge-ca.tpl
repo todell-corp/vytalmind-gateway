@@ -1,1 +1,1 @@
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=gateway-edge.odell.com" "ttl=8760h" "ip_sans=127.0.0.1,192.168.50.80" }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}
+{{ with secret "pki-edge/issue/edge-gateway" "common_name=gateway-edge.odell.com" "alt_names=localhost,edge.odell.com,gateway.odell.com" "ttl=168h" }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}
