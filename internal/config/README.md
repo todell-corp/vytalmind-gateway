@@ -7,22 +7,57 @@ This directory contains OAuth2 filter configuration files for Apicurio authentic
 ### token_secret.yaml
 Contains the Keycloak client secret for the `apicurio-registry` client.
 
-**Setup:**
-1. Login to Keycloak admin console
-2. Navigate to: Clients → apicurio-registry → Credentials
-3. Copy the Client Secret value
-4. Replace `REPLACE_WITH_KEYCLOAK_CLIENT_SECRET` in `token_secret.yaml` with the actual secret
-
 ### hmac_secret.yaml
 Contains a random 32-byte secret used for HMAC signing of OAuth cookies.
 
-**Setup:**
-```bash
-# Generate a random 32-byte secret
-openssl rand -base64 32
+## Setup Options
 
-# Replace REPLACE_WITH_RANDOM_32_BYTE_HMAC_SECRET in hmac_secret.yaml with the generated value
+### Option 1: Manual Configuration (Development)
+
+1. **Get Keycloak Client Secret:**
+   - Login to Keycloak admin console
+   - Navigate to: Clients → apicurio-registry → Credentials
+   - Copy the Client Secret value
+
+2. **Generate HMAC Secret:**
+   ```bash
+   openssl rand -base64 32
+   ```
+
+3. **Update Files:**
+   - Replace `REPLACE_WITH_KEYCLOAK_CLIENT_SECRET` in `token_secret.yaml`
+   - Replace `REPLACE_WITH_RANDOM_32_BYTE_HMAC_SECRET` in `hmac_secret.yaml`
+
+### Option 2: GitHub Secrets (CI/CD - Recommended)
+
+Store secrets in GitHub repository settings and use GitHub Actions to populate files during deployment.
+
+**GitHub Secrets to create:**
+- `OAUTH2_CLIENT_SECRET` - Keycloak client secret
+- `OAUTH2_HMAC_SECRET` - Random 32-byte base64 secret
+
+**In your GitHub Actions workflow:**
+```yaml
+- name: Configure OAuth2 Secrets
+  run: |
+    sed -i 's/REPLACE_WITH_KEYCLOAK_CLIENT_SECRET/${{ secrets.OAUTH2_CLIENT_SECRET }}/g' internal/config/token_secret.yaml
+    sed -i 's/REPLACE_WITH_RANDOM_32_BYTE_HMAC_SECRET/${{ secrets.OAUTH2_HMAC_SECRET }}/g' internal/config/hmac_secret.yaml
 ```
+
+### Option 3: Environment Variables + .env File (Local Development)
+
+1. **Create `.env` file:**
+   ```bash
+   OAUTH2_CLIENT_SECRET=your_keycloak_client_secret
+   OAUTH2_HMAC_SECRET=your_generated_hmac_secret
+   ```
+
+2. **Populate secrets before starting:**
+   ```bash
+   sed -i "s/REPLACE_WITH_KEYCLOAK_CLIENT_SECRET/$OAUTH2_CLIENT_SECRET/g" internal/config/token_secret.yaml
+   sed -i "s/REPLACE_WITH_RANDOM_32_BYTE_HMAC_SECRET/$OAUTH2_HMAC_SECRET/g" internal/config/hmac_secret.yaml
+   docker compose up -d
+   ```
 
 ## Keycloak Client Configuration
 
