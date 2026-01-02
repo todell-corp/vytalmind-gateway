@@ -92,6 +92,32 @@ template {
   command     = "echo 'Apicurio CA certificate updated'"
 }
 
+# ========================================
+# Keycloak Certificates
+# ========================================
+
+# Keycloak Server Certificate
+template {
+  source      = "/vault/config/templates/keycloak-server-cert.tpl"
+  destination = "/vault/certs/keycloak-server.crt"
+  command     = "echo 'Keycloak server certificate updated'"
+}
+
+# Keycloak Server Private Key
+template {
+  source      = "/vault/config/templates/keycloak-server-key.tpl"
+  destination = "/vault/certs/keycloak-server.key"
+  perms       = "0600"
+  command     = "echo 'Keycloak server key updated'"
+}
+
+# Keycloak CA Certificate
+template {
+  source      = "/vault/config/templates/keycloak-ca.tpl"
+  destination = "/vault/certs/keycloak-ca.crt"
+  command     = "echo 'Keycloak CA certificate updated'"
+}
+
 # Vault configuration
 vault {
   address = "${VAULT_ADDR}"

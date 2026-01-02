@@ -142,7 +142,83 @@ static_resources:
                     filename: /etc/envoy/certs/apicurio-ca.crt
                 alpn_protocols: ["h2", "http/1.1"]
 
-        # Filter Chain 2: gateway-internal.odell.com - mTLS Authentication
+        # Filter Chain 2: keycloak.odell.com - No Authentication (public OAuth/OIDC endpoints)
+        - filter_chain_match:
+            server_names: ["keycloak.odell.com"]
+
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: keycloak_https
+                codec_type: AUTO
+                use_remote_address: true
+
+                # OpenTelemetry Tracing
+                tracing:
+                  provider:
+                    name: envoy.tracers.opentelemetry
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.config.trace.v3.OpenTelemetryConfig
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: otel_collector
+                        timeout: 0.250s
+                      service_name: internal-envoy-keycloak
+
+                # Access Logging
+                access_log:
+                  - name: envoy.access_loggers.file
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+                      path: /var/log/envoy/access.log
+                      log_format:
+                        json_format:
+                          start_time: "%START_TIME%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          protocol: "%PROTOCOL%"
+                          response_code: "%RESPONSE_CODE%"
+                          bytes_sent: "%BYTES_SENT%"
+                          duration: "%DURATION%"
+                          upstream_host: "%UPSTREAM_HOST%"
+
+                http_filters:
+                  # Router filter only - no authentication for Keycloak
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+                # Route Configuration
+                route_config:
+                  name: keycloak_routes
+                  virtual_hosts:
+                    - name: keycloak_service
+                      domains: ["keycloak.odell.com"]
+                      routes:
+                        - match:
+                            prefix: /
+                          route:
+                            cluster: keycloak_backend
+                            timeout: 30s
+
+          # TLS Configuration - Keycloak Certificate
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/certs/keycloak-server.crt
+                    private_key:
+                      filename: /etc/envoy/certs/keycloak-server.key
+                validation_context:
+                  trusted_ca:
+                    filename: /etc/envoy/certs/keycloak-ca.crt
+                alpn_protocols: ["h2", "http/1.1"]
+
+        # Filter Chain 3: gateway-internal.odell.com - mTLS Authentication
         - filter_chain_match:
             server_names: ["gateway-internal.odell.com"]
 
@@ -249,6 +325,21 @@ static_resources:
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
           sni: apicurio.odell.com
+
+    # Keycloak - HTTP connection to keycloak.odell.com:8880
+    - name: keycloak_backend
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: keycloak_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: keycloak.odell.com
+                      port_value: 8880
 
     # Backend Secure Service - without mTLS for now (can be enabled later)
     - name: backend_secure
