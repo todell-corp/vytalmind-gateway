@@ -5,7 +5,8 @@ networks:
     driver: bridge
   internal-network:
     driver: bridge
-    internal: true  # No external access - zero trust boundary
+    # NOTE: Not marked as 'internal: true' to allow routing to external upstreams
+    # Zero-trust is enforced via Envoy policies (mTLS, auth), not Docker network isolation
   monitoring:
     driver: bridge
 
