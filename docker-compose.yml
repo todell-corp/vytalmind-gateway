@@ -31,6 +31,9 @@ services:
       - ./infrastructure/vault-agent-edge:/vault/config:ro
     networks:
       - edge-network
+    dns:
+      - 192.168.50.160  # Custom DNS server that can resolve vault.odell.com
+      - 8.8.8.8         # Fallback to Google DNS
     entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
     command: agent -config=/vault/config/agent.hcl
     restart: unless-stopped
@@ -53,6 +56,9 @@ services:
       - ./infrastructure/vault-agent-internal:/vault/config:ro
     networks:
       - internal-network
+    dns:
+      - 192.168.50.160  # Custom DNS server that can resolve vault.odell.com
+      - 8.8.8.8         # Fallback to Google DNS
     entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
     command: agent -config=/vault/config/agent.hcl
     restart: unless-stopped
