@@ -85,30 +85,37 @@ jobs:
             echo "✅ No existing deployment - will perform fresh deployment"
           fi
 
-      - name: Build and deploy services
+      - name: Start Vault agents first
         env:
           EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
           EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
           INTERNAL_VAULT_ROLE_ID: ${{ secrets.INTERNAL_VAULT_ROLE_ID }}
           INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
-          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
-          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
         run: |
-          echo "🏗️ Building and deploying gateway services..."
-          # Build and deploy in one step - images stay local on self-hosted runner
-          docker compose up -d --build --remove-orphans
-          echo "✅ Services deployment initiated"
-          docker compose ps
-
-      - name: Restart Vault agents to refresh certificates
-        run: |
-          echo "🔄 Restarting Vault agents to generate/refresh certificates..."
-          docker compose restart edge-vault-agent internal-vault-agent
+          echo "🔑 Starting Vault agents to generate certificates..."
+          docker compose up -d --build edge-vault-agent internal-vault-agent
 
           echo "⏳ Waiting for certificates to be generated..."
           sleep 15
 
-          echo "✅ Vault agents restarted"
+          echo "✅ Vault agents started and certificates generated"
+
+      - name: Start Envoy services
+        env:
+          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+        run: |
+          echo "🚀 Starting Envoy gateway services..."
+          docker compose up -d --build edge-envoy internal-envoy
+
+          echo "✅ Envoy services started"
+
+      - name: Start remaining services
+        run: |
+          echo "🏗️ Starting remaining services..."
+          docker compose up -d --build --remove-orphans
+          echo "✅ All services deployed"
+          docker compose ps
 
       - name: Wait for services to be healthy
         run: |
