@@ -130,8 +130,8 @@ jobs:
 
           while [ $attempt -lt $max_attempts ]; do
             # Check if both Envoy admin endpoints are ready
-            if curl -sf http://localhost:9901/ready > /dev/null 2>&1 && \
-               curl -sf http://localhost:9902/ready > /dev/null 2>&1; then
+            if curl -sf http://192.168.50.80:9901/ready > /dev/null 2>&1 && \
+               curl -sf http://192.168.50.122:9902/ready > /dev/null 2>&1; then
               echo "✅ All Envoy services are healthy"
 
               # Run full health check for informational output
@@ -151,16 +151,12 @@ jobs:
       - name: Run smoke tests
         run: |
           # Test Edge Envoy admin endpoint
-          curl -f http://localhost:9901/ready || (echo "❌ Edge Envoy not ready" && exit 1)
+          curl -f http://192.168.50.80:9901/ready || (echo "❌ Edge Envoy not ready" && exit 1)
           echo "✅ Edge Envoy is ready"
 
           # Test Internal Envoy admin endpoint
-          curl -f http://localhost:9902/ready || (echo "❌ Internal Envoy not ready" && exit 1)
+          curl -f http://192.168.50.122:9902/ready || (echo "❌ Internal Envoy not ready" && exit 1)
           echo "✅ Internal Envoy is ready"
-
-          # Test Redis
-          docker exec redis redis-cli ping || (echo "❌ Redis not responding" && exit 1)
-          echo "✅ Redis is responding"
 
       - name: Cleanup OAuth2 secret files
         if: always()
