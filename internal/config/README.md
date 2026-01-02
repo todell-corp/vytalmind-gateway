@@ -5,7 +5,7 @@ This directory contains OAuth2 filter configuration files for Apicurio authentic
 ## Secret Files
 
 ### token_secret.yaml
-Contains the Keycloak client secret for the `apicurio-registry` client.
+Contains the Keycloak client secret for the `envoy-internal-oauth` client (shared by all internal applications).
 
 ### hmac_secret.yaml
 Contains a random 32-byte secret used for HMAC signing of OAuth cookies.
@@ -16,7 +16,7 @@ Contains a random 32-byte secret used for HMAC signing of OAuth cookies.
 
 1. **Get Keycloak Client Secret:**
    - Login to Keycloak admin console
-   - Navigate to: Clients → apicurio-registry → Credentials
+   - Navigate to: Clients → envoy-internal-oauth → Credentials
    - Copy the Client Secret value
 
 2. **Generate HMAC Secret:**
@@ -73,7 +73,7 @@ Store secrets in GitHub repository settings and use GitHub Actions to generate s
 
 ## Keycloak Client Configuration
 
-For OAuth2 to work, configure the Keycloak client `apicurio-registry`:
+For OAuth2 to work, configure the Keycloak client `envoy-internal-oauth`:
 
 1. **Valid Redirect URIs:** `https://apicurio.odell.com/oauth2/callback`
 2. **Web Origins:** `https://apicurio.odell.com`

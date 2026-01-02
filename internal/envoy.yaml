@@ -107,7 +107,7 @@ static_resources:
                           path:
                             exact: /oauth2/signout
                         credentials:
-                          client_id: apicurio-registry
+                          client_id: envoy-internal-oauth
                           token_secret:
                             name: token
                             sds_config:
@@ -129,7 +129,7 @@ static_resources:
                         keycloak:
                           issuer: https://keycloak.odell.com/realms/ventusmind
                           audiences:
-                            - apicurio-registry
+                            - envoy-internal-oauth
                           remote_jwks:
                             http_uri:
                               uri: https://keycloak.odell.com/realms/ventusmind/protocol/openid-connect/certs
