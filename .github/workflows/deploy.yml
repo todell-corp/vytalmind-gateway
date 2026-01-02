@@ -15,72 +15,9 @@ env:
   COMPOSE_DOCKER_CLI_BUILD: 1
 
 jobs:
-  validate:
-    name: Validate Configuration
-    runs-on: self-hosted
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Validate docker-compose files
-        run: |
-          docker compose config > /dev/null
-          echo "✅ docker-compose.yml is valid"
-
-      - name: Validate docker-compose.shared.yml
-        run: |
-          docker compose -f docker-compose.yml -f docker-compose.shared.yml config > /dev/null
-          echo "✅ docker-compose.shared.yml is valid"
-
-      - name: Check required scripts exist
-        run: |
-          test -f scripts/setup.sh || (echo "❌ scripts/setup.sh not found" && exit 1)
-          test -f scripts/health-check.sh || (echo "❌ scripts/health-check.sh not found" && exit 1)
-          test -f scripts/teardown.sh || (echo "❌ scripts/teardown.sh not found" && exit 1)
-          echo "✅ All required scripts exist"
-
-      - name: Validate Envoy configuration files exist
-        run: |
-          test -f edge/envoy.yaml || (echo "❌ edge/envoy.yaml not found" && exit 1)
-          test -f internal/envoy.yaml || (echo "❌ internal/envoy.yaml not found" && exit 1)
-          echo "✅ Envoy configuration files exist"
-
-  build:
-    name: Build Images
-    runs-on: self-hosted
-    needs: validate
-    strategy:
-      matrix:
-        component: [edge, internal]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build ${{ matrix.component }} image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./${{ matrix.component }}
-          file: ./${{ matrix.component }}/Dockerfile
-          push: false
-          tags: vytalmind-gateway-${{ matrix.component }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/${{ matrix.component }}-image.tar
-
-      - name: Upload ${{ matrix.component }} image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.component }}-image
-          path: /tmp/${{ matrix.component }}-image.tar
-          retention-days: 1
-
   deploy:
-    name: Deploy Gateway
+    name: Build and Deploy Gateway
     runs-on: self-hosted
-    needs: build
     environment:
       name: development
       url: https://gateway.vytalmind.local
@@ -98,22 +35,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download edge image
-        uses: actions/download-artifact@v4
-        with:
-          name: edge-image
-          path: /tmp
-
-      - name: Download internal image
-        uses: actions/download-artifact@v4
-        with:
-          name: internal-image
-          path: /tmp
-
-      - name: Load Docker images
+      - name: Validate docker-compose files
         run: |
-          docker load --input /tmp/edge-image.tar
-          docker load --input /tmp/internal-image.tar
+          docker compose config > /dev/null
+          echo "✅ docker-compose.yml is valid"
+
+          docker compose -f docker-compose.yml -f docker-compose.shared.yml config > /dev/null
+          echo "✅ docker-compose.shared.yml is valid"
+
+      - name: Check required files
+        run: |
+          test -f scripts/setup.sh || (echo "❌ scripts/setup.sh not found" && exit 1)
+          test -f scripts/health-check.sh || (echo "❌ scripts/health-check.sh not found" && exit 1)
+          test -f scripts/teardown.sh || (echo "❌ scripts/teardown.sh not found" && exit 1)
+          test -f edge/envoy.yaml || (echo "❌ edge/envoy.yaml not found" && exit 1)
+          test -f internal/envoy.yaml || (echo "❌ internal/envoy.yaml not found" && exit 1)
+          echo "✅ All required files exist"
 
       - name: Generate OAuth2 secret files
         env:
@@ -148,7 +85,7 @@ jobs:
             echo "✅ No existing deployment - will perform fresh deployment"
           fi
 
-      - name: Deploy services
+      - name: Build and deploy services
         env:
           EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
           EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
@@ -157,7 +94,8 @@ jobs:
           KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
           KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
         run: |
-          echo "🚀 Deploying gateway services..."
+          echo "🏗️ Building and deploying gateway services..."
+          # Build and deploy in one step - images stay local on self-hosted runner
           docker compose up -d --build --remove-orphans
           echo "✅ Services deployment initiated"
           docker compose ps
@@ -199,24 +137,13 @@ jobs:
           docker exec redis redis-cli ping || (echo "❌ Redis not responding" && exit 1)
           echo "✅ Redis is responding"
 
-      - name: Collect deployment logs
+      - name: Cleanup OAuth2 secret files
         if: always()
         run: |
-          mkdir -p deployment-logs
-          docker compose logs > deployment-logs/all-services.log
-          docker compose logs edge-envoy > deployment-logs/edge-envoy.log
-          docker compose logs internal-envoy > deployment-logs/internal-envoy.log
-          docker compose logs edge-vault-agent > deployment-logs/edge-vault-agent.log
-          docker compose logs internal-vault-agent > deployment-logs/internal-vault-agent.log
-          docker compose logs redis > deployment-logs/redis.log
-
-      - name: Upload deployment logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-logs-${{ github.run_number }}
-          path: deployment-logs/
-          retention-days: 30
+          # Remove generated secret files to prevent leakage in workspace
+          rm -f internal/config/token_secret.yaml
+          rm -f internal/config/hmac_secret.yaml
+          echo "🧹 Secret files cleaned up"
 
       - name: Post-deployment notification
         if: always()
@@ -225,4 +152,6 @@ jobs:
             echo "✅ Gateway deployment successful!"
           else
             echo "❌ Gateway deployment failed!"
+            echo "📋 Collecting logs for troubleshooting..."
+            docker compose logs --tail=100
           fi
