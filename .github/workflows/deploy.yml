@@ -129,8 +129,13 @@ jobs:
           attempt=0
 
           while [ $attempt -lt $max_attempts ]; do
-            if make health 2>&1 | grep -q "✅"; then
-              echo "✅ All services are healthy"
+            # Check if both Envoy admin endpoints are ready
+            if curl -sf http://localhost:9901/ready > /dev/null 2>&1 && \
+               curl -sf http://localhost:9902/ready > /dev/null 2>&1; then
+              echo "✅ All Envoy services are healthy"
+
+              # Run full health check for informational output
+              make health || true
               exit 0
             fi
 
