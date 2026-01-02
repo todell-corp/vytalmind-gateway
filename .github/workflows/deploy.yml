@@ -9,15 +9,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Deployment mode'
-        required: true
-        default: 'production'
-        type: choice
-        options:
-          - production
-          - standalone
 
 env:
   DOCKER_BUILDKIT: 1
@@ -94,6 +85,14 @@ jobs:
       name: development
       url: https://gateway.vytalmind.local
     steps:
+      - name: Validate required secrets
+        run: |
+          test -n "${{ secrets.EDGE_VAULT_ROLE_ID }}" || (echo "❌ EDGE_VAULT_ROLE_ID not set" && exit 1)
+          test -n "${{ secrets.EDGE_VAULT_SECRET_ID }}" || (echo "❌ EDGE_VAULT_SECRET_ID not set" && exit 1)
+          test -n "${{ secrets.INTERNAL_VAULT_ROLE_ID }}" || (echo "❌ INTERNAL_VAULT_ROLE_ID not set" && exit 1)
+          test -n "${{ secrets.INTERNAL_VAULT_SECRET_ID }}" || (echo "❌ INTERNAL_VAULT_SECRET_ID not set" && exit 1)
+          echo "✅ All required secrets are configured"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -114,14 +113,6 @@ jobs:
           docker load --input /tmp/edge-image.tar
           docker load --input /tmp/internal-image.tar
 
-      - name: Validate required secrets
-        run: |
-          test -n "${{ secrets.EDGE_VAULT_ROLE_ID }}" || (echo "❌ EDGE_VAULT_ROLE_ID not set" && exit 1)
-          test -n "${{ secrets.EDGE_VAULT_SECRET_ID }}" || (echo "❌ EDGE_VAULT_SECRET_ID not set" && exit 1)
-          test -n "${{ secrets.INTERNAL_VAULT_ROLE_ID }}" || (echo "❌ INTERNAL_VAULT_ROLE_ID not set" && exit 1)
-          test -n "${{ secrets.INTERNAL_VAULT_SECRET_ID }}" || (echo "❌ INTERNAL_VAULT_SECRET_ID not set" && exit 1)
-          echo "✅ All required secrets are configured"
-
       - name: Check existing deployment
         run: |
           echo "🔍 Checking for existing deployment..."
@@ -140,18 +131,9 @@ jobs:
           INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
           KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
           KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-          DEPLOYMENT_MODE: ${{ github.event.inputs.mode || 'production' }}
         run: |
           echo "🚀 Deploying gateway services..."
-
-          if [ "${{ github.event.inputs.mode }}" = "standalone" ]; then
-            # Standalone mode: use docker-compose.shared.yml
-            docker compose -f docker-compose.yml -f docker-compose.shared.yml up -d --build --remove-orphans
-          else
-            # Production mode: use main docker-compose.yml
-            docker compose up -d --build --remove-orphans
-          fi
-
+          docker compose up -d --build --remove-orphans
           echo "✅ Services deployment initiated"
           docker compose ps
 
