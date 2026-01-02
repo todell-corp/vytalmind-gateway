@@ -143,10 +143,6 @@ jobs:
 
       - name: Deploy services
         run: |
-          chmod +x scripts/*.sh
-          chmod +x infrastructure/vault-agent-edge/entrypoint.sh
-          chmod +x infrastructure/vault-agent-internal/entrypoint.sh
-
           echo "🚀 Deploying gateway services..."
 
           if [ "${{ github.event.inputs.mode }}" = "standalone" ]; then

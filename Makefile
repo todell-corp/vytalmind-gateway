@@ -45,19 +45,12 @@ vault-setup:
 		echo "  export VAULT_TOKEN=<your-vault-token>"; \
 		exit 1; \
 	fi
-	@chmod +x infrastructure/vault/scripts/setup-pki.sh
 	@./infrastructure/vault/scripts/setup-pki.sh
 
 setup:
-	@chmod +x scripts/*.sh
-	@chmod +x infrastructure/vault-agent-edge/entrypoint.sh
-	@chmod +x infrastructure/vault-agent-internal/entrypoint.sh
 	@./scripts/setup.sh
 
 setup-standalone:
-	@chmod +x scripts/*.sh
-	@chmod +x infrastructure/vault-agent-edge/entrypoint.sh
-	@chmod +x infrastructure/vault-agent-internal/entrypoint.sh
 	@echo "🚀 Setting up in Standalone Mode (with local Keycloak & OTel)..."
 	@./scripts/setup.sh standalone
 
