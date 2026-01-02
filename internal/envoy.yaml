@@ -84,24 +84,58 @@ static_resources:
                           jwt_email: "%REQ(X-JWT-EMAIL)%"
 
                 http_filters:
-                  # JWT Authentication Filter
+                  # OAuth2 Filter - Handle authentication flow and redirect to Keycloak
+                  - name: envoy.filters.http.oauth2
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.oauth2.v3.OAuth2
+                      config:
+                        token_endpoint:
+                          cluster: keycloak_ssl_cluster
+                          uri: https://keycloak.odell.com/realms/ventusmind/protocol/openid-connect/token
+                          timeout: 5s
+                        authorization_endpoint: https://keycloak.odell.com/realms/ventusmind/protocol/openid-connect/auth
+                        redirect_uri: https://apicurio.odell.com/oauth2/callback
+                        redirect_path_matcher:
+                          path:
+                            exact: /oauth2/callback
+                        signout_path:
+                          path:
+                            exact: /oauth2/signout
+                        credentials:
+                          client_id: apicurio-registry
+                          token_secret:
+                            name: token
+                            sds_config:
+                              path: /etc/envoy/config/token_secret.yaml
+                          hmac_secret:
+                            name: hmac
+                            sds_config:
+                              path: /etc/envoy/config/hmac_secret.yaml
+                        auth_scopes:
+                          - openid
+                          - profile
+                          - email
+
+                  # JWT Authentication Filter - Validate token from OAuth2 flow
                   - name: envoy.filters.http.jwt_authn
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
                       providers:
                         keycloak:
-                          issuer: http://keycloak.odell.com:8080/realms/ventusmind
+                          issuer: https://keycloak.odell.com/realms/ventusmind
                           audiences:
                             - apicurio-registry
                           remote_jwks:
                             http_uri:
-                              uri: http://keycloak.odell.com:8080/realms/ventusmind/protocol/openid-connect/certs
-                              cluster: keycloak_cluster
+                              uri: https://keycloak.odell.com/realms/ventusmind/protocol/openid-connect/certs
+                              cluster: keycloak_ssl_cluster
                               timeout: 5s
                             cache_duration:
                               seconds: 300
                           forward: true
                           payload_in_metadata: jwt_payload
+                          from_cookies:
+                            - BearerToken
                       rules:
                         - match:
                             prefix: /
@@ -355,7 +389,7 @@ static_resources:
                       address: backend-secure
                       port_value: 5678
 
-    # Keycloak - JWT JWKS endpoint and OAuth2
+    # Keycloak - JWT JWKS endpoint and OAuth2 (HTTP - direct backend)
     - name: keycloak_cluster
       type: STRICT_DNS
       lb_policy: ROUND_ROBIN
@@ -368,6 +402,26 @@ static_resources:
                     socket_address:
                       address: keycloak.odell.com
                       port_value: 8080
+
+    # Keycloak SSL - HTTPS connection through Internal Envoy SSL termination
+    - name: keycloak_ssl_cluster
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: keycloak_ssl_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: keycloak.odell.com
+                      port_value: 443
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: keycloak.odell.com
 
     # OpenTelemetry Collector
     - name: otel_collector
