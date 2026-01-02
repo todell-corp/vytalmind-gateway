@@ -234,6 +234,8 @@ static_resources:
       health_checks:
         - timeout: 1s
           interval: 10s
+          unhealthy_threshold: 2
+          healthy_threshold: 2
           http_health_check:
             path: /
 
