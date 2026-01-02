@@ -105,25 +105,43 @@ echo $TOKEN | cut -d. -f2 | base64 -d | jq '.aud'
 
 **Vault PKI** at vault.odell.com:8200 (external, always required):
 ```
-pki/ (Root PKI)
-├─ Edge TLS certificates (TTL: 8760h / 1 year)
-├─ Issued to: gateway.vytalmind.local
-└─ Managed by: edge-vault-agent (AppRole: edge-envoy)
+pki-root/ (Root PKI)
+├─ Root CA: CN=odell.com Root CA
+├─ Valid: 2025-12-31 to 2035-12-29 (10 years)
+└─ Signs intermediate CAs
 
-pki_int/ (Intermediate PKI)
-├─ Internal mTLS certificates (TTL: 720h / 30 days)
-├─ SPIFFE URIs: spiffe://odell.com/service/*
-├─ Issued to: internal-envoy, backend services, Apicurio
-└─ Managed by: internal-vault-agent (AppRole: internal-envoy)
+pki-edge/ (Edge Intermediate PKI)
+├─ Intermediate CA: CN=Odell Edge Intermediate CA
+├─ Valid: 2025-12-31 to 2026-12-31 (1 year)
+├─ Role: edge-gateway
+│   ├─ Allowed domains: odell.com (with subdomains)
+│   ├─ Max TTL: 604800s (7 days / 168 hours)
+│   └─ IP SANs: Not allowed
+├─ Issued to: Edge Envoy TLS certificates
+└─ Managed by: edge-vault-agent (AppRole: edge-envoy, Policy: vault-agent)
+
+pki-intermediate/ (Internal Intermediate PKI)
+├─ Intermediate CA: CN=odell.com Intermediate CA
+├─ Valid: 2025-12-31 to 2030-12-30 (5 years)
+├─ Role: internal-services
+│   ├─ Allowed domains: odell.com (with subdomains)
+│   ├─ Max TTL: 2592000s (30 days / 720 hours)
+│   ├─ SPIFFE URIs: spiffe://odell.com/*
+│   └─ Server + Client flags: enabled
+├─ Issued to: Internal Envoy mTLS, Apicurio, backend services
+└─ Managed by: internal-vault-agent (AppRole: internal-envoy, Policy: pki-internal-services)
+           and: envoy-apicurio (AppRole: envoy-apicurio, Policy: pki-internal-services)
 ```
 
 **Vault Agent Sidecar Architecture:**
 - **Edge Vault Agent**: Dedicated sidecar container managing Edge TLS certificates only
-  - Uses Edge AppRole credentials (least privilege: access to `pki/` only)
+  - Uses Edge AppRole credentials: `edge-envoy` → policy `vault-agent`
+  - Access to: `pki-edge/issue/edge-gateway` and `pki-intermediate/issue/internal-services`
   - Writes to `edge-certs` Docker volume
-  - Auto-renews certificates before expiration
+  - Auto-renews certificates before expiration (checks every 5 minutes)
 - **Internal Vault Agent**: Dedicated sidecar container managing Internal mTLS + Apicurio certificates
-  - Uses Internal AppRole credentials (least privilege: access to `pki_int/` only)
+  - Uses Internal AppRole credentials: `internal-envoy` → policy `pki-internal-services`
+  - Access to: `pki-intermediate/issue/internal-services` only
   - Writes to `internal-certs` Docker volume
   - Manages 8 certificate files (5 internal mTLS + 3 Apicurio)
   - Auto-renews certificates before expiration
