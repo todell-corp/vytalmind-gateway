@@ -30,7 +30,7 @@ Contains a random 32-byte secret used for HMAC signing of OAuth cookies.
 
 ### Option 2: GitHub Secrets (CI/CD - Recommended)
 
-Store secrets in GitHub repository settings and use GitHub Actions to populate files during deployment.
+Store secrets in GitHub repository settings and use GitHub Actions to generate secret files from templates during deployment.
 
 **GitHub Secrets to create:**
 - `OAUTH2_CLIENT_SECRET` - Keycloak client secret
@@ -38,10 +38,15 @@ Store secrets in GitHub repository settings and use GitHub Actions to populate f
 
 **In your GitHub Actions workflow:**
 ```yaml
-- name: Configure OAuth2 Secrets
+- name: Generate OAuth2 Secret Files
   run: |
-    sed -i 's/REPLACE_WITH_KEYCLOAK_CLIENT_SECRET/${{ secrets.OAUTH2_CLIENT_SECRET }}/g' internal/config/token_secret.yaml
-    sed -i 's/REPLACE_WITH_RANDOM_32_BYTE_HMAC_SECRET/${{ secrets.OAUTH2_HMAC_SECRET }}/g' internal/config/hmac_secret.yaml
+    # Generate token_secret.yaml from template
+    sed "s/OAUTH2_CLIENT_SECRET_PLACEHOLDER/${{ secrets.OAUTH2_CLIENT_SECRET }}/g" \
+      internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
+
+    # Generate hmac_secret.yaml from template
+    sed "s/OAUTH2_HMAC_SECRET_PLACEHOLDER/${{ secrets.OAUTH2_HMAC_SECRET }}/g" \
+      internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
 ```
 
 ### Option 3: Environment Variables + .env File (Local Development)
@@ -52,10 +57,17 @@ Store secrets in GitHub repository settings and use GitHub Actions to populate f
    OAUTH2_HMAC_SECRET=your_generated_hmac_secret
    ```
 
-2. **Populate secrets before starting:**
+2. **Generate secret files from templates:**
    ```bash
-   sed -i "s/REPLACE_WITH_KEYCLOAK_CLIENT_SECRET/$OAUTH2_CLIENT_SECRET/g" internal/config/token_secret.yaml
-   sed -i "s/REPLACE_WITH_RANDOM_32_BYTE_HMAC_SECRET/$OAUTH2_HMAC_SECRET/g" internal/config/hmac_secret.yaml
+   # Generate token_secret.yaml
+   sed "s/OAUTH2_CLIENT_SECRET_PLACEHOLDER/$OAUTH2_CLIENT_SECRET/g" \
+     internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
+
+   # Generate hmac_secret.yaml
+   sed "s/OAUTH2_HMAC_SECRET_PLACEHOLDER/$OAUTH2_HMAC_SECRET/g" \
+     internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
+
+   # Start services
    docker compose up -d
    ```
 
