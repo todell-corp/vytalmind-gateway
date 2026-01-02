@@ -1,4 +1,4 @@
-FROM envoyproxy/envoy:v1.31-latest
+FROM envoyproxy/envoy:v1.31.2
 
 # Copy configuration
 COPY config/ /etc/envoy/config/

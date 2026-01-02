@@ -296,9 +296,3 @@ static_resources:
                     socket_address:
                       address: otel-collector
                       port_value: 4317
-
-# Prometheus metrics
-stats_sinks:
-  - name: envoy.stat_sinks.prometheus
-    typed_config:
-      "@type": type.googleapis.com/envoy.config.metrics.v3.PrometheusSink
