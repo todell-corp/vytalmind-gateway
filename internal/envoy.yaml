@@ -9,7 +9,7 @@ node:
 admin:
   address:
     socket_address:
-      address: 192.168.50.122
+      address: 0.0.0.0
       port_value: 9901
   access_log:
     - name: envoy.access_loggers.file
@@ -36,7 +36,7 @@ static_resources:
     - name: https_listener
       address:
         socket_address:
-          address: 192.168.50.122
+          address: 0.0.0.0
           port_value: 443
 
       listener_filters:
