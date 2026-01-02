@@ -28,13 +28,6 @@ jobs:
     name: Validate Configuration
     runs-on: self-hosted
     steps:
-      - name: Clean up previous run artifacts
-        run: |
-          # Remove Docker-generated log files that may have root ownership
-          sudo rm -rf edge/logs/* internal/logs/* || true
-          echo "✅ Cleaned up previous artifacts"
-        continue-on-error: true
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -69,13 +62,6 @@ jobs:
       matrix:
         component: [edge, internal]
     steps:
-      - name: Clean up previous run artifacts
-        run: |
-          # Remove Docker-generated log files that may have root ownership
-          sudo rm -rf edge/logs/* internal/logs/* || true
-          echo "✅ Cleaned up previous artifacts"
-        continue-on-error: true
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -108,13 +94,6 @@ jobs:
       name: development
       url: https://gateway.vytalmind.local
     steps:
-      - name: Clean up previous run artifacts
-        run: |
-          # Remove Docker-generated log files that may have root ownership
-          sudo rm -rf edge/logs/* internal/logs/* || true
-          echo "✅ Cleaned up previous artifacts"
-        continue-on-error: true
-
       - name: Checkout code
         uses: actions/checkout@v4
 

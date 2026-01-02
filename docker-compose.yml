@@ -14,6 +14,8 @@ volumes:
   keycloak-data:
   edge-certs:      # Edge TLS certificates (managed by edge-vault-agent)
   internal-certs:  # Internal mTLS + Apicurio certificates (managed by internal-vault-agent)
+  edge-logs:       # Edge Envoy logs
+  internal-logs:   # Internal Envoy logs
 
 services:
   # Edge Vault Agent - Manages Edge TLS Certificates
@@ -100,7 +102,7 @@ services:
       - ./edge/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./edge/config:/etc/envoy/config:ro
       - edge-certs:/etc/envoy/certs:ro
-      - ./edge/logs:/var/log/envoy
+      - edge-logs:/var/log/envoy
     networks:
       - edge-network
       - internal-network  # Can reach internal-envoy
@@ -129,7 +131,7 @@ services:
       - ./internal/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./internal/config:/etc/envoy/config:ro
       - internal-certs:/etc/envoy/certs:ro
-      - ./internal/logs:/var/log/envoy
+      - internal-logs:/var/log/envoy
     networks:
       - internal-network  # Only internal network - zero trust
     command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
