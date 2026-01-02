@@ -91,6 +91,8 @@ jobs:
           test -n "${{ secrets.EDGE_VAULT_SECRET_ID }}" || (echo "❌ EDGE_VAULT_SECRET_ID not set" && exit 1)
           test -n "${{ secrets.INTERNAL_VAULT_ROLE_ID }}" || (echo "❌ INTERNAL_VAULT_ROLE_ID not set" && exit 1)
           test -n "${{ secrets.INTERNAL_VAULT_SECRET_ID }}" || (echo "❌ INTERNAL_VAULT_SECRET_ID not set" && exit 1)
+          test -n "${{ secrets.OAUTH2_CLIENT_SECRET }}" || (echo "❌ OAUTH2_CLIENT_SECRET not set" && exit 1)
+          test -n "${{ secrets.OAUTH2_HMAC_SECRET }}" || (echo "❌ OAUTH2_HMAC_SECRET not set" && exit 1)
           echo "✅ All required secrets are configured"
 
       - name: Checkout code
@@ -112,6 +114,27 @@ jobs:
         run: |
           docker load --input /tmp/edge-image.tar
           docker load --input /tmp/internal-image.tar
+
+      - name: Generate OAuth2 secret files
+        env:
+          OAUTH2_CLIENT_SECRET: ${{ secrets.OAUTH2_CLIENT_SECRET }}
+          OAUTH2_HMAC_SECRET: ${{ secrets.OAUTH2_HMAC_SECRET }}
+        run: |
+          echo "🔐 Generating OAuth2 secret files from templates..."
+
+          # Generate token_secret.yaml from template
+          sed "s/OAUTH2_CLIENT_SECRET_PLACEHOLDER/${OAUTH2_CLIENT_SECRET}/g" \
+            internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
+
+          # Generate hmac_secret.yaml from template
+          sed "s/OAUTH2_HMAC_SECRET_PLACEHOLDER/${OAUTH2_HMAC_SECRET}/g" \
+            internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
+
+          # Set restrictive permissions
+          chmod 600 internal/config/token_secret.yaml
+          chmod 600 internal/config/hmac_secret.yaml
+
+          echo "✅ OAuth2 secret files generated"
 
       - name: Check existing deployment
         run: |

@@ -33,21 +33,13 @@ Contains a random 32-byte secret used for HMAC signing of OAuth cookies.
 Store secrets in GitHub repository settings and use GitHub Actions to generate secret files from templates during deployment.
 
 **GitHub Secrets to create:**
-- `OAUTH2_CLIENT_SECRET` - Keycloak client secret
-- `OAUTH2_HMAC_SECRET` - Random 32-byte base64 secret
+- `OAUTH2_CLIENT_SECRET` - Keycloak client secret for `envoy-internal-oauth` client
+- `OAUTH2_HMAC_SECRET` - Random 32-byte base64 secret (generate with `openssl rand -base64 32`)
 
-**In your GitHub Actions workflow:**
-```yaml
-- name: Generate OAuth2 Secret Files
-  run: |
-    # Generate token_secret.yaml from template
-    sed "s/OAUTH2_CLIENT_SECRET_PLACEHOLDER/${{ secrets.OAUTH2_CLIENT_SECRET }}/g" \
-      internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
-
-    # Generate hmac_secret.yaml from template
-    sed "s/OAUTH2_HMAC_SECRET_PLACEHOLDER/${{ secrets.OAUTH2_HMAC_SECRET }}/g" \
-      internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
-```
+**Setup in GitHub:**
+1. Go to your repository → Settings → Secrets and variables → Actions
+2. Add the two secrets above
+3. The deployment workflow automatically generates the secret files from templates
 
 ### Option 3: Environment Variables + .env File (Local Development)
 
