@@ -100,6 +100,16 @@ jobs:
           echo "✅ Services deployment initiated"
           docker compose ps
 
+      - name: Restart Vault agents to refresh certificates
+        run: |
+          echo "🔄 Restarting Vault agents to generate/refresh certificates..."
+          docker compose restart edge-vault-agent internal-vault-agent
+
+          echo "⏳ Waiting for certificates to be generated..."
+          sleep 15
+
+          echo "✅ Vault agents restarted"
+
       - name: Wait for services to be healthy
         run: |
           echo "⏳ Waiting for services to start..."
