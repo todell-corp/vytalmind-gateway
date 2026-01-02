@@ -51,13 +51,19 @@ Store secrets in GitHub repository settings and use GitHub Actions to generate s
 
 2. **Generate secret files from templates:**
    ```bash
-   # Generate token_secret.yaml
-   sed "s/OAUTH2_CLIENT_SECRET_PLACEHOLDER/$OAUTH2_CLIENT_SECRET/g" \
+   # Generate token_secret.yaml (using awk to handle special characters)
+   awk -v secret="$OAUTH2_CLIENT_SECRET" \
+     '{gsub(/OAUTH2_CLIENT_SECRET_PLACEHOLDER/, secret); print}' \
      internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
 
-   # Generate hmac_secret.yaml
-   sed "s/OAUTH2_HMAC_SECRET_PLACEHOLDER/$OAUTH2_HMAC_SECRET/g" \
+   # Generate hmac_secret.yaml (using awk to handle special characters)
+   awk -v secret="$OAUTH2_HMAC_SECRET" \
+     '{gsub(/OAUTH2_HMAC_SECRET_PLACEHOLDER/, secret); print}' \
      internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
+
+   # Set restrictive permissions
+   chmod 600 internal/config/token_secret.yaml
+   chmod 600 internal/config/hmac_secret.yaml
 
    # Start services
    docker compose up -d

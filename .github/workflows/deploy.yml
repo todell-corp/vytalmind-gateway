@@ -122,12 +122,14 @@ jobs:
         run: |
           echo "🔐 Generating OAuth2 secret files from templates..."
 
-          # Generate token_secret.yaml from template
-          sed "s/OAUTH2_CLIENT_SECRET_PLACEHOLDER/${OAUTH2_CLIENT_SECRET}/g" \
+          # Generate token_secret.yaml from template using awk (handles special chars safely)
+          awk -v secret="$OAUTH2_CLIENT_SECRET" \
+            '{gsub(/OAUTH2_CLIENT_SECRET_PLACEHOLDER/, secret); print}' \
             internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
 
-          # Generate hmac_secret.yaml from template
-          sed "s/OAUTH2_HMAC_SECRET_PLACEHOLDER/${OAUTH2_HMAC_SECRET}/g" \
+          # Generate hmac_secret.yaml from template using awk (handles special chars safely)
+          awk -v secret="$OAUTH2_HMAC_SECRET" \
+            '{gsub(/OAUTH2_HMAC_SECRET_PLACEHOLDER/, secret); print}' \
             internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
 
           # Set restrictive permissions
