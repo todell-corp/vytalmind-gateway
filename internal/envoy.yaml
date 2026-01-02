@@ -1,6 +1,11 @@
 # Internal Envoy Configuration - Zero Trust Internal Gateway
 # Handles: mTLS for service-to-service, JWT for user-facing services
 
+# Node configuration for SDS
+node:
+  id: internal-envoy
+  cluster: internal-gateway
+
 admin:
   address:
     socket_address:
