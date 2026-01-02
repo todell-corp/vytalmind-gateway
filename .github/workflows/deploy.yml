@@ -115,21 +115,40 @@ jobs:
           docker load --input /tmp/internal-image.tar
 
       - name: Configure deployment environment
+        env:
+          EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
+          EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
+          INTERNAL_VAULT_ROLE_ID: ${{ secrets.INTERNAL_VAULT_ROLE_ID }}
+          INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
+          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+          DEPLOYMENT_MODE: ${{ github.event.inputs.mode || 'production' }}
         run: |
+          # Create .env from template
           cp .env.example .env
 
-          # Set Vault credentials from secrets
-          sed -i "s|EDGE_VAULT_ROLE_ID=.*|EDGE_VAULT_ROLE_ID=${{ secrets.EDGE_VAULT_ROLE_ID }}|" .env
-          sed -i "s|EDGE_VAULT_SECRET_ID=.*|EDGE_VAULT_SECRET_ID=${{ secrets.EDGE_VAULT_SECRET_ID }}|" .env
-          sed -i "s|INTERNAL_VAULT_ROLE_ID=.*|INTERNAL_VAULT_ROLE_ID=${{ secrets.INTERNAL_VAULT_ROLE_ID }}|" .env
-          sed -i "s|INTERNAL_VAULT_SECRET_ID=.*|INTERNAL_VAULT_SECRET_ID=${{ secrets.INTERNAL_VAULT_SECRET_ID }}|" .env
+          # Validate required secrets are present
+          : "${EDGE_VAULT_ROLE_ID:?EDGE_VAULT_ROLE_ID secret not set}"
+          : "${EDGE_VAULT_SECRET_ID:?EDGE_VAULT_SECRET_ID secret not set}"
+          : "${INTERNAL_VAULT_ROLE_ID:?INTERNAL_VAULT_ROLE_ID secret not set}"
+          : "${INTERNAL_VAULT_SECRET_ID:?INTERNAL_VAULT_SECRET_ID secret not set}"
 
-          # Set Keycloak configuration
-          sed -i "s|KEYCLOAK_URL=.*|KEYCLOAK_URL=${{ secrets.KEYCLOAK_URL }}|" .env
-          sed -i "s|KEYCLOAK_CLIENT_SECRET=.*|KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}|" .env
+          # Write secrets directly (no pattern matching)
+          cat >> .env <<EOF
 
-          # Set deployment mode
-          sed -i "s|DEPLOYMENT_MODE=.*|DEPLOYMENT_MODE=${{ github.event.inputs.mode || 'production' }}|" .env
+# ==============================================================================
+# SECRETS (Injected by GitHub Actions)
+# ==============================================================================
+EDGE_VAULT_ROLE_ID=${EDGE_VAULT_ROLE_ID}
+EDGE_VAULT_SECRET_ID=${EDGE_VAULT_SECRET_ID}
+INTERNAL_VAULT_ROLE_ID=${INTERNAL_VAULT_ROLE_ID}
+INTERNAL_VAULT_SECRET_ID=${INTERNAL_VAULT_SECRET_ID}
+KEYCLOAK_URL=${KEYCLOAK_URL}
+KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
+EOF
+
+          echo "✅ Environment configured successfully"
 
       - name: Check existing deployment
         run: |
