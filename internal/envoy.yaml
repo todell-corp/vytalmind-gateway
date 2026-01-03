@@ -319,7 +319,7 @@ static_resources:
                     filename: /etc/envoy/certs/internal-ca.crt
 
   clusters:
-    # Apicurio Registry - SSL connection to apicurio.odell.com:8888
+    # Apicurio Registry - HTTP connection to apicurio.odell.com:8888 (TLS terminated at Envoy)
     - name: apicurio_registry
       type: STRICT_DNS
       dns_lookup_family: V4_ONLY
@@ -333,11 +333,6 @@ static_resources:
                     socket_address:
                       address: apicurio.odell.com
                       port_value: 8888
-      transport_socket:
-        name: envoy.transport_sockets.tls
-        typed_config:
-          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-          sni: apicurio.odell.com
 
     # Keycloak - HTTP connection to keycloak.odell.com:8880
     - name: keycloak_backend
