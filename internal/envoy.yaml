@@ -121,33 +121,7 @@ static_resources:
                           - profile
                           - email
 
-                  # JWT Authentication Filter - Validate token from OAuth2 flow
-                  - name: envoy.filters.http.jwt_authn
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
-                      providers:
-                        keycloak:
-                          issuer: https://keycloak.odell.com/realms/ventusmind
-                          audiences:
-                            - envoy-internal-oauth
-                          remote_jwks:
-                            http_uri:
-                              uri: https://keycloak.odell.com/realms/ventusmind/protocol/openid-connect/certs
-                              cluster: keycloak_ssl_cluster
-                              timeout: 5s
-                            cache_duration:
-                              seconds: 300
-                          forward: true
-                          payload_in_metadata: jwt_payload
-                          from_cookies:
-                            - BearerToken
-                      rules:
-                        - match:
-                            prefix: /
-                          requires:
-                            provider_name: keycloak
-
-                  # Router Filter
+                  # Router Filter - Pass through to Apicurio after OAuth2 authentication
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
