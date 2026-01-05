@@ -37,6 +37,25 @@ EOF
   command     = "/vault/scripts/render-vault-cert.sh keycloak /vault/certs/keycloak.json"
 }
 
+# Chronos service certificate
+template {
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/chronos"
+   "common_name=chronos.odell.com"
+   "alt_names=localhost"
+   (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
+}
+{{- end -}}
+EOF
+  destination = "/vault/certs/chronos.json"
+  perms       = "0600"
+  command     = "/vault/scripts/render-vault-cert.sh chronos /vault/certs/chronos.json"
+}
+
 # 2) Root CA (trust anchor) — correct endpoint is /cert/ca
 template {
   contents = <<EOF
