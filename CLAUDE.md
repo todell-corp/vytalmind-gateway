@@ -51,9 +51,16 @@ pki-root/ (Root CA at vault.odell.com:8200)
 ```
 
 **AppRole Authentication:**
-- Role: `edge-envoy` (reused from previous architecture)
-- Policy: `vault-agent`
+- Role: Service-specific (e.g., `keycloak`)
+- Policy: `vault-agent-{service}` (e.g., `vault-agent-keycloak`)
 - Credentials: Set in `.env` as `VAULT_ROLE_ID` and `VAULT_SECRET_ID`
+
+**Setting Up a New Service:**
+Use [scripts/setup-vault-service.sh](scripts/setup-vault-service.sh) to create PKI role, policy, and AppRole:
+```bash
+./scripts/setup-vault-service.sh keycloak keycloak.odell.com "keycloak,localhost" 168h
+```
+This script is idempotent - safe to run multiple times.
 
 ### Installing Root CA in Ubuntu Trust Store
 
@@ -152,7 +159,8 @@ vytalmind-gateway/
 ├── CLAUDE.md            # This file
 ├── README.md            # User documentation
 ├── scripts/
-│   └── render-vault-cert.sh   # Certificate rendering script
+│   ├── render-vault-cert.sh   # Certificate rendering script
+│   └── setup-vault-service.sh # Vault service setup automation
 └── .github/
     └── workflows/
         ├── deploy.yml         # Deployment automation
