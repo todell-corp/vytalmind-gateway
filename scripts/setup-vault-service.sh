@@ -129,21 +129,3 @@ vault write "${PKI_PATH}/issue/${ROLE_NAME}" \
   ttl="1h" >/dev/null
 
 echo "✓ Certificate issuance verified"
-
-# Get RoleID and SecretID
-echo ""
-echo "==> Credentials for ${SERVICE}:"
-echo ""
-ROLE_ID=$(vault read -field=role_id "auth/approle/role/${SERVICE}/role-id")
-SECRET_ID=$(vault write -force -field=secret_id "auth/approle/role/${SERVICE}/secret-id")
-
-echo "VAULT_ROLE_ID=${ROLE_ID}"
-echo "VAULT_SECRET_ID=${SECRET_ID}"
-echo ""
-echo "==> Add these to your .env file:"
-echo ""
-echo "# ${SERVICE} service credentials"
-echo "VAULT_ROLE_ID_${SERVICE^^}=${ROLE_ID}"
-echo "VAULT_SECRET_ID_${SERVICE^^}=${SECRET_ID}"
-echo ""
-echo "✅ Setup complete for ${SERVICE}"
