@@ -62,7 +62,7 @@ jobs:
           TLS_CERT_TTL: ${{ secrets.TLS_CERT_TTL || '168h' }}
         run: |
           echo "🚀 Starting gateway services..."
-          docker compose up -d --build --remove-orphans
+          docker compose up -d --build --remove-orphans --force-recreate
           echo "✅ Services deployed"
           docker compose ps
 
