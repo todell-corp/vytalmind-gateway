@@ -25,7 +25,7 @@ auto_auth {
 # TLS Server Certificate
 template {
   contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=${TLS_DOMAIN}" "alt_names=localhost" "ttl=${TLS_CERT_TTL}" }}{{ .Data.certificate }}{{ end }}
+{{ with secret "pki-edge/issue/edge-gateway" (printf "common_name=%s" (env "TLS_DOMAIN")) "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.certificate }}{{ end }}
 EOF
   destination = "/vault/certs/tls-server.crt"
   command     = "echo 'TLS server certificate updated'"
@@ -34,7 +34,7 @@ EOF
 # TLS Server Private Key
 template {
   contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=${TLS_DOMAIN}" "alt_names=localhost" "ttl=${TLS_CERT_TTL}" }}{{ .Data.private_key }}{{ end }}
+{{ with secret "pki-edge/issue/edge-gateway" (printf "common_name=%s" (env "TLS_DOMAIN")) "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.private_key }}{{ end }}
 EOF
   destination = "/vault/certs/tls-server.key"
   perms       = "0600"
@@ -44,7 +44,7 @@ EOF
 # CA Certificate
 template {
   contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=${TLS_DOMAIN}" "alt_names=localhost" "ttl=${TLS_CERT_TTL}" }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}
+{{ with secret "pki-edge/issue/edge-gateway" (printf "common_name=%s" (env "TLS_DOMAIN")) "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}
 EOF
   destination = "/vault/certs/tls-ca.crt"
   command     = "echo 'CA certificate updated'"
@@ -52,6 +52,6 @@ EOF
 
 # Vault configuration
 vault {
-  address = "${VAULT_ADDR}"
+  address = "https://vault.odell.com:8200"
   tls_skip_verify = true
 }
