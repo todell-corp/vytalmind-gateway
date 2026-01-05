@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # Usage: render-vault-cert.sh <service-name> <json-path> [reload-cmd]
-if [[ $# -lt 2 ]]; then
+if [ $# -lt 2 ]; then
   echo "Usage: render-vault-cert.sh <service-name> <json-path> [reload-cmd]"
   exit 1
 fi
@@ -46,7 +46,7 @@ EOF
 echo "[vault-agent] Rendered certs for $SERVICE"
 
 # Optional reload command
-if [[ -n "$RELOAD_CMD" ]]; then
+if [ -n "$RELOAD_CMD" ]; then
   echo "[vault-agent] Running reload command for $SERVICE"
   eval "$RELOAD_CMD" || true
 fi

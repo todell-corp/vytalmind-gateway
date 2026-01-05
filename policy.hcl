@@ -3,6 +3,11 @@ path "pki-intermediate/issue/vytalmind-api-gateway" {
   capabilities = ["create", "update"]
 }
 
+# Allow issuing certificates for keycloak
+path "pki-intermediate/issue/keycloak" {
+  capabilities = ["create", "update"]
+}
+
 # Allow reading the INTERMEDIATE CA (this was missing)
 path "pki-intermediate/cert/ca" {
   capabilities = ["read"]
