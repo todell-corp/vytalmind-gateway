@@ -17,6 +17,7 @@ services:
     volumes:
       - certs:/vault/certs
       - ./vault-agent.hcl:/vault/config/agent.hcl:ro
+      - ./scripts:/vault/scripts:ro
     dns:
       - 192.168.50.160  # Custom DNS server for vault.odell.com
       - 8.8.8.8

@@ -44,9 +44,9 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - certificate_chain:
-                      filename: /etc/envoy/certs/keycloak-server.crt
+                      filename: /etc/envoy/certs/keycloak.fullchain.pem
                     private_key:
-                      filename: /etc/envoy/certs/keycloak-server.key
+                      filename: /etc/envoy/certs/keycloak.key
         # Default filter chain for all other domains
         - filters:
             - name: envoy.filters.network.http_connection_manager

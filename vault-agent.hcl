@@ -1,14 +1,12 @@
 exit_after_auth = false
 pid_file = "/tmp/vault-agent.pid"
 
-# Auto-auth using AppRole
 auto_auth {
   method {
     type = "approle"
     namespace = ""
-
     config = {
-      role_id_file_path = "/tmp/role-id"
+      role_id_file_path   = "/tmp/role-id"
       secret_id_file_path = "/tmp/secret-id"
       remove_secret_id_file_after_reading = false
     }
@@ -16,60 +14,38 @@ auto_auth {
 
   sink {
     type = "file"
-    config = {
-      path = "/tmp/vault-token"
-    }
+    config = { path = "/tmp/vault-token" }
   }
 }
 
-# TLS Server Certificate
+# 1) Issue ONCE and save the full response as JSON
 template {
-  contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" (printf "common_name=%s" (env "TLS_DOMAIN")) "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.certificate }}{{ end }}
-EOF
-  destination = "/vault/certs/tls-server.crt"
-  command     = "echo 'TLS server certificate updated'"
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/keycloak"
+   "common_name=keycloak.odell.com"
+   "alt_names=keycloak,localhost"
+   (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
 }
-
-# TLS Server Private Key
-template {
-  contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" (printf "common_name=%s" (env "TLS_DOMAIN")) "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.private_key }}{{ end }}
+{{- end -}}
 EOF
-  destination = "/vault/certs/tls-server.key"
+  destination = "/vault/certs/keycloak.json"
   perms       = "0600"
-  command     = "echo 'TLS server key updated'"
+  command     = "/vault/scripts/render-vault-cert.sh keycloak /vault/certs/keycloak.json 'pkill -HUP envoy'"
 }
 
-# CA Certificate
+# 2) Root CA (trust anchor) — correct endpoint is /cert/ca
 template {
-  contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" (printf "common_name=%s" (env "TLS_DOMAIN")) "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}
+  contents = <<EOF
+{{ with secret "pki-root/cert/ca" }}{{ .Data.certificate }}{{ end }}
 EOF
-  destination = "/vault/certs/tls-ca.crt"
-  command     = "echo 'CA certificate updated'"
+  destination = "/vault/cert/odell-root-ca.crt"
+  command     = "echo Root CA updated"
 }
 
-# Keycloak TLS Server Certificate
-template {
-  contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=keycloak.odell.com" "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.certificate }}{{ end }}
-EOF
-  destination = "/vault/certs/keycloak-server.crt"
-  command     = "echo 'Keycloak TLS server certificate updated'"
-}
-
-# Keycloak TLS Server Private Key
-template {
-  contents    = <<EOF
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=keycloak.odell.com" "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.private_key }}{{ end }}
-EOF
-  destination = "/vault/certs/keycloak-server.key"
-  perms       = "0600"
-  command     = "echo 'Keycloak TLS server key updated'"
-}
-
-# Vault configuration
 vault {
   address = "https://vault.odell.com:8200"
   tls_skip_verify = true

@@ -42,9 +42,10 @@ Internet → Envoy (TLS termination) → /health endpoint
 **Vault PKI Hierarchy:**
 ```
 pki-root/ (Root CA at vault.odell.com:8200)
-  └─ pki-edge/ (Intermediate CA)
-      └─ edge-gateway role
-          ├─ Allowed domains: Configured via TLS_DOMAIN
+  └─ pki-intermediate/ (Intermediate CA)
+      └─ keycloak role
+          ├─ Allowed domains: keycloak.odell.com
+          ├─ Alt names: keycloak, localhost
           ├─ Default TTL: 168h (7 days)
           └─ Auto-renewed by Vault Agent
 ```
@@ -53,6 +54,85 @@ pki-root/ (Root CA at vault.odell.com:8200)
 - Role: `edge-envoy` (reused from previous architecture)
 - Policy: `vault-agent`
 - Credentials: Set in `.env` as `VAULT_ROLE_ID` and `VAULT_SECRET_ID`
+
+### Installing Root CA in Ubuntu Trust Store
+
+For Ubuntu and browsers to trust the Vault-issued certificates, install the root CA:
+
+1. **Extract the root CA from vault-agent**:
+   ```bash
+   docker exec vault-agent cat /vault/certs/root-ca.crt > /tmp/vault-root-ca.pem
+   ```
+
+2. **Install in Ubuntu**:
+   ```bash
+   sudo cp /tmp/vault-root-ca.pem /usr/local/share/ca-certificates/vault-root-ca.crt
+   sudo update-ca-certificates
+   ```
+
+3. **Verify**:
+   ```bash
+   curl https://keycloak.odell.com/health  # Should work without -k
+   openssl s_client -connect keycloak.odell.com:443 -servername keycloak.odell.com < /dev/null 2>&1 | grep "Verify return code"
+   # Should show: Verify return code: 0 (ok)
+   ```
+
+4. **For Firefox** (uses own trust store):
+   - Settings → Privacy & Security → Certificates → View Certificates
+   - Authorities tab → Import
+   - Select `/tmp/vault-root-ca.pem`
+   - Check "Trust this CA to identify websites"
+
+### Certificate Files
+
+After the vault-agent updates, the following certificate files are available:
+
+- `tls-server.crt` - Default domain server certificate
+- `tls-server.key` - Default domain private key
+- `tls-ca.crt` - CA chain (legacy, may be empty)
+- `keycloak-fullchain.crt` - **Full chain: server + intermediate CA** (use this for TLS)
+- `keycloak-server.key` - Keycloak private key
+- `root-ca.crt` - Root CA certificate (for system trust installation)
+
+### Certificate Rendering Script
+
+All certificate rendering is handled by [scripts/render-vault-cert.sh](scripts/render-vault-cert.sh):
+
+**Usage:**
+```bash
+render-vault-cert.sh <service-name> <json-path> [reload-cmd]
+```
+
+**Parameters:**
+- `service-name`: Service identifier (e.g., "keycloak", "api-gateway")
+- `json-path`: Path to Vault-generated JSON file with cert data
+- `reload-cmd`: (Optional) Command to run after rendering (e.g., signal service to reload)
+
+**Output Files:**
+- `${service-name}.leaf.pem` - Server certificate only
+- `${service-name}.issuing_ca.pem` - Issuing CA certificate
+- `${service-name}.fullchain.pem` - Full chain (leaf + CA) - **use this for TLS**
+- `${service-name}.key` - Private key (600 permissions)
+
+**Example - Adding a new service:**
+```hcl
+template {
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/my-service"
+   "common_name=my-service.odell.com"
+   "ttl=168h" -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
+}
+{{- end -}}
+EOF
+  destination = "/vault/certs/my-service.json"
+  perms       = "0600"
+  command     = "/vault/scripts/render-vault-cert.sh my-service /vault/certs/my-service.json"
+}
+```
 
 ## File Structure
 
@@ -67,6 +147,8 @@ vytalmind-gateway/
 ├── Makefile             # Common commands
 ├── CLAUDE.md            # This file
 ├── README.md            # User documentation
+├── scripts/
+│   └── render-vault-cert.sh   # Certificate rendering script
 └── .github/
     └── workflows/
         ├── deploy.yml         # Deployment automation
