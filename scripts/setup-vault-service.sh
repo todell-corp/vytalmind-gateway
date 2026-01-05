@@ -20,7 +20,11 @@ fi
 
 SERVICE="$1"
 COMMON_NAME="$2"
-ALT_NAMES="${3:-${SERVICE},localhost}"
+
+ALT_NAMES="${3:-${COMMON_NAME},localhost}"
+# Normalize alt names: remove duplicates, keep order stable
+ALT_NAMES=$(echo "${ALT_NAMES}" | tr ',' '\n' | sort -u | paste -sd, -)
+
 TTL="${4:-168h}"
 
 VAULT_ADDR="${VAULT_ADDR:-https://vault.odell.com:8200}"
