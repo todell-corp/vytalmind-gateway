@@ -106,13 +106,17 @@ render-vault-cert.sh <service-name> <json-path> [reload-cmd]
 **Parameters:**
 - `service-name`: Service identifier (e.g., "keycloak", "api-gateway")
 - `json-path`: Path to Vault-generated JSON file with cert data
-- `reload-cmd`: (Optional) Command to run after rendering (e.g., signal service to reload)
+- `reload-cmd`: (Optional) Command to run after rendering
 
 **Output Files:**
 - `${service-name}.leaf.pem` - Server certificate only
 - `${service-name}.issuing_ca.pem` - Issuing CA certificate
 - `${service-name}.fullchain.pem` - Full chain (leaf + CA) - **use this for TLS**
 - `${service-name}.key` - Private key (600 permissions)
+- `${service-name}-sds.yaml` - Envoy SDS configuration for automatic reload
+
+**Automatic Certificate Reload:**
+Envoy uses SDS (Secret Discovery Service) to automatically detect and reload certificates when they change. The script generates an SDS YAML file that Envoy watches. When Vault Agent renews certificates, Envoy picks up the changes without requiring restart or manual reload.
 
 **Example - Adding a new service:**
 ```hcl

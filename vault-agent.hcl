@@ -34,7 +34,7 @@ template {
 EOF
   destination = "/vault/certs/keycloak.json"
   perms       = "0600"
-  command     = "/vault/scripts/render-vault-cert.sh keycloak /vault/certs/keycloak.json 'pkill -HUP envoy'"
+  command     = "/vault/scripts/render-vault-cert.sh keycloak /vault/certs/keycloak.json"
 }
 
 # 2) Root CA (trust anchor) — correct endpoint is /cert/ca

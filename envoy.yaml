@@ -42,11 +42,12 @@ static_resources:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
-                tls_certificates:
-                  - certificate_chain:
-                      filename: /etc/envoy/certs/keycloak.fullchain.pem
-                    private_key:
-                      filename: /etc/envoy/certs/keycloak.key
+                tls_certificate_sds_secret_configs:
+                  - name: keycloak_cert
+                    sds_config:
+                      path_config_source:
+                        path: /etc/envoy/certs/keycloak-sds.yaml
+                      resource_api_version: V3
         # Default filter chain for all other domains
         - filters:
             - name: envoy.filters.network.http_connection_manager
