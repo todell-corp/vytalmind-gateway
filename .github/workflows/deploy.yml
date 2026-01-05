@@ -53,6 +53,12 @@ jobs:
             echo "✅ No existing deployment - will perform fresh deployment"
           fi
 
+      - name: Clean certificates volume
+        run: |
+          echo "🧹 Cleaning certificates volume..."
+          docker compose down -v
+          echo "✅ Certificates volume cleaned"
+
       - name: Start services
         env:
           VAULT_ADDR: https://vault.odell.com:8200
