@@ -40,7 +40,7 @@ Update these required values in `.env`:
 ```env
 VAULT_ROLE_ID=<your-vault-approle-role-id>
 VAULT_SECRET_ID=<your-vault-approle-secret-id>
-TLS_DOMAIN=gateway.odell.com
+TLS_DOMAIN=vytalmind.odell.com
 TLS_CERT_TTL=168h
 ```
 

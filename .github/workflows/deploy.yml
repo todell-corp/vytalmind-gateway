@@ -58,7 +58,7 @@ jobs:
           VAULT_ADDR: https://vault.odell.com:8200
           VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-          TLS_DOMAIN: ${{ secrets.TLS_DOMAIN || 'gateway.odell.com' }}
+          TLS_DOMAIN: ${{ secrets.TLS_DOMAIN || 'vytalmind.odell.com' }}
           TLS_CERT_TTL: ${{ secrets.TLS_CERT_TTL || '168h' }}
         run: |
           echo "🚀 Starting gateway services..."

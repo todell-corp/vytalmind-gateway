@@ -12,7 +12,7 @@ services:
       VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
       VAULT_ROLE_ID: ${VAULT_ROLE_ID}
       VAULT_SECRET_ID: ${VAULT_SECRET_ID}
-      TLS_DOMAIN: ${TLS_DOMAIN:-gateway.odell.com}
+      TLS_DOMAIN: ${TLS_DOMAIN:-vytalmind.odell.com}
       TLS_CERT_TTL: ${TLS_CERT_TTL:-168h}
     volumes:
       - certs:/vault/certs
