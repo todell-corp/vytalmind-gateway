@@ -84,11 +84,12 @@ static_resources:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
-                tls_certificates:
-                  - certificate_chain:
-                      filename: /etc/envoy/certs/tls-server.crt
-                    private_key:
-                      filename: /etc/envoy/certs/tls-server.key
+                tls_certificate_sds_secret_configs:
+                  - name: keycloak_cert
+                    sds_config:
+                      path_config_source:
+                        path: /etc/envoy/certs/keycloak-sds.yaml
+                      resource_api_version: V3
 
   clusters:
     - name: keycloak_backend
