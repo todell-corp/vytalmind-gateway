@@ -50,6 +50,25 @@ EOF
   command     = "echo 'CA certificate updated'"
 }
 
+# Keycloak TLS Server Certificate
+template {
+  contents    = <<EOF
+{{ with secret "pki-edge/issue/edge-gateway" "common_name=keycloak.odell.com" "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.certificate }}{{ end }}
+EOF
+  destination = "/vault/certs/keycloak-server.crt"
+  command     = "echo 'Keycloak TLS server certificate updated'"
+}
+
+# Keycloak TLS Server Private Key
+template {
+  contents    = <<EOF
+{{ with secret "pki-edge/issue/edge-gateway" "common_name=keycloak.odell.com" "alt_names=localhost" (printf "ttl=%s" (env "TLS_CERT_TTL")) }}{{ .Data.private_key }}{{ end }}
+EOF
+  destination = "/vault/certs/keycloak-server.key"
+  perms       = "0600"
+  command     = "echo 'Keycloak TLS server key updated'"
+}
+
 # Vault configuration
 vault {
   address = "https://vault.odell.com:8200"
