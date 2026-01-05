@@ -24,6 +24,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        apk add --no-cache jq
         echo "$${VAULT_ROLE_ID}" > /tmp/role-id
         echo "$${VAULT_SECRET_ID}" > /tmp/secret-id
         exec vault agent -config=/vault/config/agent.hcl
