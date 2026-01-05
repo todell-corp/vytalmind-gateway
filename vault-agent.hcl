@@ -23,7 +23,7 @@ template {
   contents = <<EOF
 {{- with secret "pki-intermediate/issue/keycloak"
    "common_name=keycloak.odell.com"
-   "alt_names=keycloak,localhost"
+   "alt_names=localhost"
    (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
 {
   "certificate": {{ .Data.certificate | toJSON }},
