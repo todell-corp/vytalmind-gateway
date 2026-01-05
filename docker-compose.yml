@@ -1,42 +1,31 @@
 version: '3.8'
 
-networks:
-  edge-network:
-    driver: bridge
-  internal-network:
-    driver: bridge
-    # NOTE: Not marked as 'internal: true' to allow routing to external upstreams
-    # Zero-trust is enforced via Envoy policies (mTLS, auth), not Docker network isolation
-  monitoring:
-    driver: bridge
-
 volumes:
-  redis-data:
-  keycloak-data:
-  edge-certs:      # Edge TLS certificates (managed by edge-vault-agent)
-  internal-certs:  # Internal mTLS + Apicurio certificates (managed by internal-vault-agent)
-  edge-logs:       # Edge Envoy logs
-  internal-logs:   # Internal Envoy logs
+  certs:  # TLS certificates managed by vault-agent
 
 services:
-  # Edge Vault Agent - Manages Edge TLS Certificates
-  edge-vault-agent:
+  # Vault Agent - Manages TLS Certificates
+  vault-agent:
     image: hashicorp/vault:1.16
-    container_name: edge-vault-agent
+    container_name: vault-agent
     environment:
       VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
-      EDGE_VAULT_ROLE_ID: ${EDGE_VAULT_ROLE_ID}
-      EDGE_VAULT_SECRET_ID: ${EDGE_VAULT_SECRET_ID}
+      VAULT_ROLE_ID: ${VAULT_ROLE_ID}
+      VAULT_SECRET_ID: ${VAULT_SECRET_ID}
+      TLS_DOMAIN: ${TLS_DOMAIN:-gateway.odell.com}
+      TLS_CERT_TTL: ${TLS_CERT_TTL:-168h}
     volumes:
-      - edge-certs:/vault/certs
-      - ./infrastructure/vault-agent-edge:/vault/config:ro
-    networks:
-      - edge-network
+      - certs:/vault/certs
+      - ./vault-agent.hcl:/vault/config/agent.hcl:ro
     dns:
-      - 192.168.50.160  # Custom DNS server that can resolve vault.odell.com
-      - 8.8.8.8         # Fallback to Google DNS
-    entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
-    command: agent -config=/vault/config/agent.hcl
+      - 192.168.50.160  # Custom DNS server for vault.odell.com
+      - 8.8.8.8
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "$${VAULT_ROLE_ID}" > /tmp/role-id
+        echo "$${VAULT_SECRET_ID}" > /tmp/secret-id
+        exec vault agent -config=/vault/config/agent.hcl
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "sh", "-c", "test -f /tmp/vault-token && pgrep -f 'vault agent'"]
@@ -44,123 +33,26 @@ services:
       timeout: 5s
       retries: 5
 
-  # Internal Vault Agent - Manages Internal mTLS + Apicurio Certificates
-  internal-vault-agent:
-    image: hashicorp/vault:1.16
-    container_name: internal-vault-agent
+  # Envoy - TLS Termination Gateway
+  envoy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: envoy
+    depends_on:
+      vault-agent:
+        condition: service_healthy
+    ports:
+      - "443:443"    # HTTPS listener
+      - "9901:9901"  # Admin interface
     environment:
-      VAULT_ADDR: ${VAULT_ADDR:-https://vault.odell.com:8200}
-      INTERNAL_VAULT_ROLE_ID: ${INTERNAL_VAULT_ROLE_ID}
-      INTERNAL_VAULT_SECRET_ID: ${INTERNAL_VAULT_SECRET_ID}
+      ENVOY_UID: 0
     volumes:
-      - internal-certs:/vault/certs
-      - ./infrastructure/vault-agent-internal:/vault/config:ro
-    networks:
-      - internal-network
-    dns:
-      - 192.168.50.160  # Custom DNS server that can resolve vault.odell.com
-      - 8.8.8.8         # Fallback to Google DNS
-    entrypoint: ["/bin/sh", "/vault/config/entrypoint.sh"]
-    command: agent -config=/vault/config/agent.hcl
+      - certs:/etc/envoy/certs:ro
+    command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /tmp/vault-token && pgrep -f 'vault agent'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis - Distributed Rate Limiting
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
-    networks:
-      - edge-network
-    command: redis-server /usr/local/etc/redis/redis.conf
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-
-  # Edge Envoy - External Gateway with TLS Termination
-  edge-envoy:
-    build:
-      context: ./edge
-      dockerfile: Dockerfile
-    container_name: edge-envoy
-    depends_on:
-      redis:
-        condition: service_healthy
-      edge-vault-agent:
-        condition: service_healthy
-      # Remove keycloak dependency if using external Keycloak
-    ports:
-      - "192.168.50.80:443:443"     # HTTPS listener
-      - "192.168.50.80:9901:9901"   # Admin interface
-    environment:
-      ENVOY_UID: 0
-    volumes:
-      - ./edge/envoy.yaml:/etc/envoy/envoy.yaml:ro
-      - ./edge/config:/etc/envoy/config:ro
-      - edge-certs:/etc/envoy/certs:ro
-      - edge-logs:/var/log/envoy
-    networks:
-      - edge-network
-      - internal-network  # Can reach internal-envoy
-    command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
-    healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9901/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # Internal Envoy - Internal Gateway
-  internal-envoy:
-    build:
-      context: ./internal
-      dockerfile: Dockerfile
-    container_name: internal-envoy
-    depends_on:
-      internal-vault-agent:
-        condition: service_healthy
-    ports:
-      - "192.168.50.122:443:443"      # HTTPS listener (SNI-based routing)
-      - "192.168.50.122:9901:9901"    # Admin interface
-    environment:
-      ENVOY_UID: 0
-    volumes:
-      - ./internal/envoy.yaml:/etc/envoy/envoy.yaml:ro
-      - ./internal/config:/etc/envoy/config:ro
-      - internal-certs:/etc/envoy/certs:ro
-      - internal-logs:/var/log/envoy
-    networks:
-      - internal-network  # Only internal network - zero trust
-    command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9901/ready"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-
-  # Example Backend Service (without mTLS) - for direct edge routing
-  backend-simple:
-    image: hashicorp/http-echo
-    container_name: backend-simple
-    networks:
-      - edge-network
-    command: ["-text", "Hello from simple backend (via edge)"]
-
-  # Example Backend Service (with mTLS) - must go through internal-envoy
-  backend-secure:
-    image: hashicorp/http-echo
-    container_name: backend-secure
-    networks:
-      - internal-network
-    command: ["-text", "Hello from secure backend (via internal envoy)"]

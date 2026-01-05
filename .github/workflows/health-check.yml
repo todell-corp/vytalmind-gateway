@@ -15,152 +15,68 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set environment variables
-        run: |
-          echo "ENV_NAME=development" >> $GITHUB_ENV
-          echo "EDGE_ADMIN_URL=http://localhost:9901" >> $GITHUB_ENV
-          echo "INTERNAL_ADMIN_URL=http://localhost:9902" >> $GITHUB_ENV
-
-      - name: Check Edge Envoy health
-        id: edge-health
+      - name: Check Envoy health
+        id: envoy-health
         continue-on-error: true
         run: |
-          echo "🔍 Checking Edge Envoy health..."
+          echo "🔍 Checking Envoy health..."
 
           # Check ready endpoint
-          if curl -f -s ${{ env.EDGE_ADMIN_URL }}/ready > /dev/null; then
-            echo "✅ Edge Envoy is ready"
+          if curl -f -s http://localhost:9901/ready > /dev/null; then
+            echo "✅ Envoy is ready"
           else
-            echo "❌ Edge Envoy is not ready"
-            echo "edge_healthy=false" >> $GITHUB_OUTPUT
+            echo "❌ Envoy is not ready"
+            echo "envoy_healthy=false" >> $GITHUB_OUTPUT
             exit 1
           fi
 
           # Check server info
-          curl -s ${{ env.EDGE_ADMIN_URL }}/server_info | jq '.'
+          curl -s http://localhost:9901/server_info | jq '.'
 
-          # Check cluster health
-          echo "📊 Edge Envoy cluster status:"
-          curl -s ${{ env.EDGE_ADMIN_URL }}/clusters | grep -E "health_flags|priority"
-
-          echo "edge_healthy=true" >> $GITHUB_OUTPUT
-
-      - name: Check Internal Envoy health
-        id: internal-health
-        continue-on-error: true
-        run: |
-          echo "🔍 Checking Internal Envoy health..."
-
-          # Check ready endpoint
-          if curl -f -s ${{ env.INTERNAL_ADMIN_URL }}/ready > /dev/null; then
-            echo "✅ Internal Envoy is ready"
-          else
-            echo "❌ Internal Envoy is not ready"
-            echo "internal_healthy=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-          # Check server info
-          curl -s ${{ env.INTERNAL_ADMIN_URL }}/server_info | jq '.'
-
-          # Check cluster health
-          echo "📊 Internal Envoy cluster status:"
-          curl -s ${{ env.INTERNAL_ADMIN_URL }}/clusters | grep -E "health_flags|priority"
-
-          echo "internal_healthy=true" >> $GITHUB_OUTPUT
-
-      - name: Check Redis health
-        id: redis-health
-        continue-on-error: true
-        run: |
-          echo "🔍 Checking Redis health..."
-
-          if docker exec redis redis-cli ping | grep -q "PONG"; then
-            echo "✅ Redis is healthy"
-            echo "redis_healthy=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Redis is not healthy"
-            echo "redis_healthy=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-          # Check Redis info
-          docker exec redis redis-cli info server | grep -E "redis_version|uptime_in_seconds"
-          docker exec redis redis-cli info stats | grep -E "total_connections_received|total_commands_processed"
+          echo "envoy_healthy=true" >> $GITHUB_OUTPUT
 
       - name: Check certificate expiration
         id: cert-check
         continue-on-error: true
         run: |
-          echo "�� Checking certificate expiration..."
+          echo "🔒 Checking certificate expiration..."
 
-          # Check Edge TLS certificate
-          echo "Edge TLS Certificate:"
-          docker exec edge-envoy openssl x509 -noout -enddate -in /etc/envoy/certs/edge/server.crt
+          # Check TLS certificate
+          docker exec envoy openssl x509 -noout -enddate -in /etc/envoy/certs/tls-server.crt
 
-          edge_days=$(docker exec edge-envoy openssl x509 -noout -enddate -in /etc/envoy/certs/edge/server.crt | sed 's/notAfter=//' | xargs -I {} date -d {} +%s)
+          cert_days=$(docker exec envoy openssl x509 -noout -enddate -in /etc/envoy/certs/tls-server.crt | sed 's/notAfter=//' | xargs -I {} date -d {} +%s)
           current_days=$(date +%s)
-          days_until_edge_expiry=$(( ($edge_days - $current_days) / 86400 ))
+          days_until_expiry=$(( ($cert_days - $current_days) / 86400 ))
 
-          echo "edge_days_remaining=$days_until_edge_expiry" >> $GITHUB_OUTPUT
+          echo "days_remaining=$days_until_expiry" >> $GITHUB_OUTPUT
 
-          if [ $days_until_edge_expiry -lt 7 ]; then
-            echo "⚠️ Edge certificate expires in $days_until_edge_expiry days"
-            echo "edge_cert_warning=true" >> $GITHUB_OUTPUT
+          if [ $days_until_expiry -lt 7 ]; then
+            echo "⚠️ Certificate expires in $days_until_expiry days"
+            echo "cert_warning=true" >> $GITHUB_OUTPUT
           else
-            echo "✅ Edge certificate expires in $days_until_edge_expiry days"
-            echo "edge_cert_warning=false" >> $GITHUB_OUTPUT
+            echo "✅ Certificate expires in $days_until_expiry days"
+            echo "cert_warning=false" >> $GITHUB_OUTPUT
           fi
 
-          # Check Internal mTLS certificate
-          echo "Internal mTLS Certificate:"
-          docker exec internal-envoy openssl x509 -noout -enddate -in /etc/envoy/certs/internal/server.crt
-
-          internal_days=$(docker exec internal-envoy openssl x509 -noout -enddate -in /etc/envoy/certs/internal/server.crt | sed 's/notAfter=//' | xargs -I {} date -d {} +%s)
-          days_until_internal_expiry=$(( ($internal_days - $current_days) / 86400 ))
-
-          echo "internal_days_remaining=$days_until_internal_expiry" >> $GITHUB_OUTPUT
-
-          if [ $days_until_internal_expiry -lt 7 ]; then
-            echo "⚠️ Internal certificate expires in $days_until_internal_expiry days"
-            echo "internal_cert_warning=true" >> $GITHUB_OUTPUT
-          else
-            echo "✅ Internal certificate expires in $days_until_internal_expiry days"
-            echo "internal_cert_warning=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check metrics availability
-        id: metrics-check
+      - name: Test health endpoint
+        id: health-endpoint
         continue-on-error: true
         run: |
-          echo "📊 Checking metrics endpoints..."
+          echo "🏥 Testing health endpoint..."
 
-          # Check Edge Envoy metrics
-          if curl -f -s ${{ env.EDGE_ADMIN_URL }}/stats/prometheus > /dev/null; then
-            echo "✅ Edge Envoy metrics available"
-            edge_metrics_count=$(curl -s ${{ env.EDGE_ADMIN_URL }}/stats/prometheus | wc -l)
-            echo "Edge metrics count: $edge_metrics_count"
-            echo "edge_metrics_healthy=true" >> $GITHUB_OUTPUT
+          if curl -fk https://localhost:443/health > /dev/null 2>&1; then
+            echo "✅ Health endpoint responding"
+            echo "health_endpoint_ok=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ Edge Envoy metrics not available"
-            echo "edge_metrics_healthy=false" >> $GITHUB_OUTPUT
-          fi
-
-          # Check Internal Envoy metrics
-          if curl -f -s ${{ env.INTERNAL_ADMIN_URL }}/stats/prometheus > /dev/null; then
-            echo "✅ Internal Envoy metrics available"
-            internal_metrics_count=$(curl -s ${{ env.INTERNAL_ADMIN_URL }}/stats/prometheus | wc -l)
-            echo "Internal metrics count: $internal_metrics_count"
-            echo "internal_metrics_healthy=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Internal Envoy metrics not available"
-            echo "internal_metrics_healthy=false" >> $GITHUB_OUTPUT
+            echo "❌ Health endpoint not responding"
+            echo "health_endpoint_ok=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
 
       - name: Generate health report
         if: always()
         run: |
-          echo "# Health Check Report - ${{ env.ENV_NAME }}" > health-report.md
+          echo "# Health Check Report" > health-report.md
           echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> health-report.md
           echo "" >> health-report.md
 
@@ -168,22 +84,10 @@ jobs:
           echo "| Service | Status |" >> health-report.md
           echo "|---------|--------|" >> health-report.md
 
-          if [ "${{ steps.edge-health.outputs.edge_healthy }}" = "true" ]; then
-            echo "| Edge Envoy | ✅ Healthy |" >> health-report.md
+          if [ "${{ steps.envoy-health.outputs.envoy_healthy }}" = "true" ]; then
+            echo "| Envoy | ✅ Healthy |" >> health-report.md
           else
-            echo "| Edge Envoy | ❌ Unhealthy |" >> health-report.md
-          fi
-
-          if [ "${{ steps.internal-health.outputs.internal_healthy }}" = "true" ]; then
-            echo "| Internal Envoy | ✅ Healthy |" >> health-report.md
-          else
-            echo "| Internal Envoy | ❌ Unhealthy |" >> health-report.md
-          fi
-
-          if [ "${{ steps.redis-health.outputs.redis_healthy }}" = "true" ]; then
-            echo "| Redis | ✅ Healthy |" >> health-report.md
-          else
-            echo "| Redis | ❌ Unhealthy |" >> health-report.md
+            echo "| Envoy | ❌ Unhealthy |" >> health-report.md
           fi
 
           echo "" >> health-report.md
@@ -191,37 +95,23 @@ jobs:
           echo "| Certificate | Days Remaining | Status |" >> health-report.md
           echo "|-------------|----------------|--------|" >> health-report.md
 
-          if [ -n "${{ steps.cert-check.outputs.edge_days_remaining }}" ]; then
-            if [ "${{ steps.cert-check.outputs.edge_cert_warning }}" = "true" ]; then
-              echo "| Edge TLS | ${{ steps.cert-check.outputs.edge_days_remaining }} | ⚠️ Warning |" >> health-report.md
+          if [ -n "${{ steps.cert-check.outputs.days_remaining }}" ]; then
+            if [ "${{ steps.cert-check.outputs.cert_warning }}" = "true" ]; then
+              echo "| TLS Server | ${{ steps.cert-check.outputs.days_remaining }} | ⚠️ Warning |" >> health-report.md
             else
-              echo "| Edge TLS | ${{ steps.cert-check.outputs.edge_days_remaining }} | ✅ Good |" >> health-report.md
-            fi
-          fi
-
-          if [ -n "${{ steps.cert-check.outputs.internal_days_remaining }}" ]; then
-            if [ "${{ steps.cert-check.outputs.internal_cert_warning }}" = "true" ]; then
-              echo "| Internal mTLS | ${{ steps.cert-check.outputs.internal_days_remaining }} | ⚠️ Warning |" >> health-report.md
-            else
-              echo "| Internal mTLS | ${{ steps.cert-check.outputs.internal_days_remaining }} | ✅ Good |" >> health-report.md
+              echo "| TLS Server | ${{ steps.cert-check.outputs.days_remaining }} | ✅ Good |" >> health-report.md
             fi
           fi
 
           echo "" >> health-report.md
-          echo "## Metrics" >> health-report.md
+          echo "## Endpoints" >> health-report.md
           echo "| Endpoint | Status |" >> health-report.md
           echo "|----------|--------|" >> health-report.md
 
-          if [ "${{ steps.metrics-check.outputs.edge_metrics_healthy }}" = "true" ]; then
-            echo "| Edge Envoy Prometheus | ✅ Available |" >> health-report.md
+          if [ "${{ steps.health-endpoint.outputs.health_endpoint_ok }}" = "true" ]; then
+            echo "| /health | ✅ Responding |" >> health-report.md
           else
-            echo "| Edge Envoy Prometheus | ❌ Unavailable |" >> health-report.md
-          fi
-
-          if [ "${{ steps.metrics-check.outputs.internal_metrics_healthy }}" = "true" ]; then
-            echo "| Internal Envoy Prometheus | ✅ Available |" >> health-report.md
-          else
-            echo "| Internal Envoy Prometheus | ❌ Unavailable |" >> health-report.md
+            echo "| /health | ❌ Not responding |" >> health-report.md
           fi
 
           cat health-report.md
@@ -230,7 +120,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: health-report-${{ env.ENV_NAME }}-${{ github.run_number }}
+          name: health-report-${{ github.run_number }}
           path: health-report.md
           retention-days: 30
 
@@ -239,28 +129,18 @@ jobs:
         run: |
           alert_needed=false
 
-          if [ "${{ steps.edge-health.outputs.edge_healthy }}" != "true" ]; then
-            echo "⚠️ ALERT: Edge Envoy is unhealthy"
+          if [ "${{ steps.envoy-health.outputs.envoy_healthy }}" != "true" ]; then
+            echo "⚠️ ALERT: Envoy is unhealthy"
             alert_needed=true
           fi
 
-          if [ "${{ steps.internal-health.outputs.internal_healthy }}" != "true" ]; then
-            echo "⚠️ ALERT: Internal Envoy is unhealthy"
+          if [ "${{ steps.cert-check.outputs.cert_warning }}" = "true" ]; then
+            echo "⚠️ ALERT: Certificate expiring soon"
             alert_needed=true
           fi
 
-          if [ "${{ steps.redis-health.outputs.redis_healthy }}" != "true" ]; then
-            echo "⚠️ ALERT: Redis is unhealthy"
-            alert_needed=true
-          fi
-
-          if [ "${{ steps.cert-check.outputs.edge_cert_warning }}" = "true" ]; then
-            echo "⚠️ ALERT: Edge certificate expiring soon"
-            alert_needed=true
-          fi
-
-          if [ "${{ steps.cert-check.outputs.internal_cert_warning }}" = "true" ]; then
-            echo "⚠️ ALERT: Internal certificate expiring soon"
+          if [ "${{ steps.health-endpoint.outputs.health_endpoint_ok }}" != "true" ]; then
+            echo "⚠️ ALERT: Health endpoint not responding"
             alert_needed=true
           fi
 

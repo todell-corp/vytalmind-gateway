@@ -24,56 +24,24 @@ jobs:
     steps:
       - name: Validate required secrets
         run: |
-          test -n "${{ secrets.EDGE_VAULT_ROLE_ID }}" || (echo "❌ EDGE_VAULT_ROLE_ID not set" && exit 1)
-          test -n "${{ secrets.EDGE_VAULT_SECRET_ID }}" || (echo "❌ EDGE_VAULT_SECRET_ID not set" && exit 1)
-          test -n "${{ secrets.INTERNAL_VAULT_ROLE_ID }}" || (echo "❌ INTERNAL_VAULT_ROLE_ID not set" && exit 1)
-          test -n "${{ secrets.INTERNAL_VAULT_SECRET_ID }}" || (echo "❌ INTERNAL_VAULT_SECRET_ID not set" && exit 1)
-          test -n "${{ secrets.OAUTH2_CLIENT_SECRET }}" || (echo "❌ OAUTH2_CLIENT_SECRET not set" && exit 1)
-          test -n "${{ secrets.OAUTH2_HMAC_SECRET }}" || (echo "❌ OAUTH2_HMAC_SECRET not set" && exit 1)
+          test -n "${{ secrets.VAULT_ROLE_ID }}" || (echo "❌ VAULT_ROLE_ID not set" && exit 1)
+          test -n "${{ secrets.VAULT_SECRET_ID }}" || (echo "❌ VAULT_SECRET_ID not set" && exit 1)
           echo "✅ All required secrets are configured"
 
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate docker-compose files
+      - name: Validate docker-compose file
         run: |
           docker compose config > /dev/null
           echo "✅ docker-compose.yml is valid"
 
-          docker compose -f docker-compose.yml -f docker-compose.shared.yml config > /dev/null
-          echo "✅ docker-compose.shared.yml is valid"
-
       - name: Check required files
         run: |
-          test -f scripts/setup.sh || (echo "❌ scripts/setup.sh not found" && exit 1)
-          test -f scripts/health-check.sh || (echo "❌ scripts/health-check.sh not found" && exit 1)
-          test -f scripts/teardown.sh || (echo "❌ scripts/teardown.sh not found" && exit 1)
-          test -f edge/envoy.yaml || (echo "❌ edge/envoy.yaml not found" && exit 1)
-          test -f internal/envoy.yaml || (echo "❌ internal/envoy.yaml not found" && exit 1)
+          test -f envoy.yaml || (echo "❌ envoy.yaml not found" && exit 1)
+          test -f vault-agent.hcl || (echo "❌ vault-agent.hcl not found" && exit 1)
+          test -f Dockerfile || (echo "❌ Dockerfile not found" && exit 1)
           echo "✅ All required files exist"
-
-      - name: Generate OAuth2 secret files
-        env:
-          OAUTH2_CLIENT_SECRET: ${{ secrets.OAUTH2_CLIENT_SECRET }}
-          OAUTH2_HMAC_SECRET: ${{ secrets.OAUTH2_HMAC_SECRET }}
-        run: |
-          echo "🔐 Generating OAuth2 secret files from templates..."
-
-          # Generate token_secret.yaml from template using awk (handles special chars safely)
-          awk -v secret="$OAUTH2_CLIENT_SECRET" \
-            '{gsub(/OAUTH2_CLIENT_SECRET_PLACEHOLDER/, secret); print}' \
-            internal/config/token_secret.yaml.template > internal/config/token_secret.yaml
-
-          # Generate hmac_secret.yaml from template using awk (handles special chars safely)
-          awk -v secret="$OAUTH2_HMAC_SECRET" \
-            '{gsub(/OAUTH2_HMAC_SECRET_PLACEHOLDER/, secret); print}' \
-            internal/config/hmac_secret.yaml.template > internal/config/hmac_secret.yaml
-
-          # Set restrictive permissions
-          chmod 600 internal/config/token_secret.yaml
-          chmod 600 internal/config/hmac_secret.yaml
-
-          echo "✅ OAuth2 secret files generated"
 
       - name: Check existing deployment
         run: |
@@ -85,39 +53,17 @@ jobs:
             echo "✅ No existing deployment - will perform fresh deployment"
           fi
 
-      - name: Start Vault agents first
+      - name: Start services
         env:
           VAULT_ADDR: https://vault.odell.com:8200
-          EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
-          EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
-          INTERNAL_VAULT_ROLE_ID: ${{ secrets.INTERNAL_VAULT_ROLE_ID }}
-          INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+          TLS_DOMAIN: ${{ secrets.TLS_DOMAIN || 'gateway.odell.com' }}
+          TLS_CERT_TTL: ${{ secrets.TLS_CERT_TTL || '168h' }}
         run: |
-          echo "🔑 Starting Vault agents to generate certificates..."
-          docker compose up -d --build edge-vault-agent internal-vault-agent
-
-          echo "⏳ Waiting for certificates to be generated..."
-          sleep 15
-
-          echo "✅ Vault agents started and certificates generated"
-
-      - name: Start Envoy and remaining services
-        env:
-          VAULT_ADDR: https://vault.odell.com:8200
-          EDGE_VAULT_ROLE_ID: ${{ secrets.EDGE_VAULT_ROLE_ID }}
-          EDGE_VAULT_SECRET_ID: ${{ secrets.EDGE_VAULT_SECRET_ID }}
-          INTERNAL_VAULT_ROLE_ID: ${{ secrets.INTERNAL_VAULT_ROLE_ID }}
-          INTERNAL_VAULT_SECRET_ID: ${{ secrets.INTERNAL_VAULT_SECRET_ID }}
-          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
-          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-        run: |
-          echo "🚀 Starting Envoy gateway services..."
-          docker compose up -d --build edge-envoy internal-envoy
-
-          echo "🏗️ Starting remaining services..."
+          echo "🚀 Starting gateway services..."
           docker compose up -d --build --remove-orphans
-
-          echo "✅ All services deployed"
+          echo "✅ Services deployed"
           docker compose ps
 
       - name: Wait for services to be healthy
@@ -129,42 +75,27 @@ jobs:
           attempt=0
 
           while [ $attempt -lt $max_attempts ]; do
-            # Check if both Envoy admin endpoints are ready
-            if curl -sf http://192.168.50.80:9901/ready > /dev/null 2>&1 && \
-               curl -sf http://192.168.50.122:9901/ready > /dev/null 2>&1; then
-              echo "✅ All Envoy services are healthy"
-
-              # Run full health check for informational output
-              make health || true
+            if curl -sf http://localhost:9901/ready > /dev/null 2>&1; then
+              echo "✅ Gateway is healthy"
               exit 0
             fi
 
             attempt=$((attempt + 1))
-            echo "Attempt $attempt/$max_attempts - Services not ready yet..."
+            echo "Attempt $attempt/$max_attempts - Service not ready yet..."
             sleep 10
           done
 
-          echo "❌ Services failed to become healthy"
+          echo "❌ Service failed to become healthy"
           docker compose logs
           exit 1
 
       - name: Run smoke tests
         run: |
-          # Test Edge Envoy admin endpoint
-          curl -f http://192.168.50.80:9901/ready || (echo "❌ Edge Envoy not ready" && exit 1)
-          echo "✅ Edge Envoy is ready"
+          curl -f http://localhost:9901/ready || (echo "❌ Envoy not ready" && exit 1)
+          echo "✅ Envoy is ready"
 
-          # Test Internal Envoy admin endpoint
-          curl -f http://192.168.50.122:9901/ready || (echo "❌ Internal Envoy not ready" && exit 1)
-          echo "✅ Internal Envoy is ready"
-
-      - name: Cleanup OAuth2 secret files
-        if: always()
-        run: |
-          # Remove generated secret files to prevent leakage in workspace
-          rm -f internal/config/token_secret.yaml
-          rm -f internal/config/hmac_secret.yaml
-          echo "🧹 Secret files cleaned up"
+          curl -fk https://localhost:443/health || (echo "❌ Health endpoint failed" && exit 1)
+          echo "✅ Health endpoint responding"
 
       - name: Post-deployment notification
         if: always()

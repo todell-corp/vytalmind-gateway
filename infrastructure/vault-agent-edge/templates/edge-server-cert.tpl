@@ -1,1 +1,0 @@
-{{ with secret "pki-edge/issue/edge-gateway" "common_name=gateway-edge.odell.com" "alt_names=localhost,edge.odell.com,gateway.odell.com" "ttl=168h" }}{{ .Data.certificate }}{{ end }}

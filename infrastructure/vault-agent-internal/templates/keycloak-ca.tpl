@@ -1,1 +1,0 @@
-{{ with secret "pki-intermediate/issue/internal-services" "common_name=keycloak.odell.com" "ttl=720h" }}{{ range .Data.ca_chain }}{{ . }}{{ end }}{{ end }}

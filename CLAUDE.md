@@ -4,647 +4,393 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VytalMind Zero-Trust Gateway is a production-ready dual-layer Envoy Proxy architecture implementing zero-trust security principles. The architecture is designed to support a **future GraphQL Gateway** that will sit between the two Envoy layers.
+VytalMind Gateway is a minimal Envoy Proxy deployment providing TLS termination with Vault-managed certificates. This is a barebones foundation that can be extended with additional features as needed.
 
-**Ultimate Architecture:**
+**Current Architecture:**
 ```
-Client → Edge Envoy → GraphQL Gateway → Internal Envoy → Backend Services
-```
-
-Currently deployed without GraphQL layer:
-```
-Internet → Edge Envoy (TLS/JWT) → Internal Envoy (mTLS) → Backend Services
-              ↓                           ↓
-        Direct Backends           Secure Backends
+Internet → Envoy (TLS termination) → /health endpoint
+           ↓
+    Vault Agent (auto-renew certs)
 ```
 
-## Critical Architecture Concepts
+## Core Components
 
-### Network Topology
+### Envoy Proxy
+- **Purpose**: TLS termination and basic HTTP routing
+- **Configuration**: [envoy.yaml](envoy.yaml) in project root
+- **Ports**:
+  - 443 (HTTPS listener)
+  - 9901 (Admin interface)
+- **Features**:
+  - TLS termination using Vault-issued certificates
+  - Basic `/health` endpoint (returns "OK")
+  - Stdout access logging
+  - Admin interface for metrics and debugging
 
-**Two-Subnet Design:**
-- **Edge Network** (172.20.0.0/24): Internet-facing tier
-  - Edge Envoy, Redis, direct backends, (future: GraphQL Gateway)
-  - Handles external traffic, TLS termination, JWT validation
+### Vault Agent
+- **Purpose**: Automatic certificate management
+- **Configuration**: [vault-agent.hcl](vault-agent.hcl) in project root
+- **Vault PKI**: Uses `pki-edge/issue/edge-gateway` role
+- **Certificates Managed**:
+  - `tls-server.crt` - Server certificate
+  - `tls-server.key` - Private key
+  - `tls-ca.crt` - CA certificate
+- **Auto-Renewal**: Certificates automatically renewed before expiration
 
-- **Internal Network** (172.21.0.0/24): Service mesh tier
-  - Internal Envoy, secure backends, (future: GraphQL Gateway)
-  - **IMPORTANT**: Does NOT have `internal: true` in docker-compose.yml
-  - This network needs to route to services on other hosts/networks
-  - Zero-trust is enforced via Envoy policies (mTLS, auth), not Docker network isolation
+### Certificate Management
 
-**Why two subnets matter:**
-- Clear tier separation for monitoring and firewall rules
-- Future GraphQL Gateway will bridge both networks (like Edge Envoy currently does)
-- Network segmentation provides observability benefits
-
-### Service Communication
-
-**Edge Envoy** (bridges both networks):
-- Connected to BOTH edge-network and internal-network
-- Routes to external services not in docker-compose context
-- Envoy upstream clusters can point to remote hosts
-- Needs access to host network for routing to external upstreams
-
-**Internal Envoy** (internal-network only):
-- Routes to backends both local (in docker-compose) and remote (on other hosts)
-- Upstream cluster configurations define services outside this deployment
-- mTLS enforcement happens at Envoy policy level, not network isolation
-
-### JWT Authentication & Audiences
-
-**JWT Audience Configuration** is critical for security and service integration.
-
-The `audience` (aud) claim in JWT tokens specifies which services are authorized to accept the token. This prevents token reuse across different services and ensures tokens are only used for their intended purpose.
-
-**Current Configuration** in [edge/envoy.yaml](edge/envoy.yaml):
-```yaml
-providers:
-  keycloak:
-    issuer: http://keycloak:8080/realms/vytalmind
-    audiences:
-      - edge-gateway  # Only tokens with this audience are accepted
+**Vault PKI Hierarchy:**
+```
+pki-root/ (Root CA at vault.odell.com:8200)
+  └─ pki-edge/ (Intermediate CA)
+      └─ edge-gateway role
+          ├─ Allowed domains: Configured via TLS_DOMAIN
+          ├─ Default TTL: 168h (7 days)
+          └─ Auto-renewed by Vault Agent
 ```
 
-**How it works:**
-1. Client requests token from Keycloak with specific audience (client ID)
-2. Keycloak issues JWT with `"aud": "edge-gateway"` claim
-3. Edge Envoy validates the token and checks audience matches configuration
-4. If audience doesn't match, request is rejected with 401 Unauthorized
+**AppRole Authentication:**
+- Role: `edge-envoy` (reused from previous architecture)
+- Policy: `vault-agent`
+- Credentials: Set in `.env` as `VAULT_ROLE_ID` and `VAULT_SECRET_ID`
 
-**Keycloak Client Configuration:**
-- Client ID should match the audience value (typically `edge-gateway`)
-- Add "Audience" protocol mapper if needed:
-  - Mapper Type: Audience
-  - Included Client Audience: `edge-gateway`
-  - Add to access token: ON
+## File Structure
 
-**Multiple Audiences:**
-You can configure multiple valid audiences if needed:
-```yaml
-audiences:
-  - edge-gateway
-  - api-gateway
-  - legacy-service
 ```
-
-**Debugging audience issues:**
-```bash
-# Decode JWT to inspect audience claim
-echo $TOKEN | cut -d. -f2 | base64 -d | jq '.aud'
-
-# Should output: "edge-gateway" or ["edge-gateway", ...]
+vytalmind-gateway/
+├── envoy.yaml           # Envoy configuration
+├── vault-agent.hcl      # Vault Agent certificate management
+├── Dockerfile           # Envoy container image
+├── docker-compose.yml   # Service orchestration
+├── .env                 # Environment variables (not in git)
+├── .env.example         # Environment template
+├── Makefile             # Common commands
+├── CLAUDE.md            # This file
+├── README.md            # User documentation
+└── .github/
+    └── workflows/
+        ├── deploy.yml         # Deployment automation
+        └── health-check.yml   # Health monitoring
 ```
-
-**IMPORTANT**: When integrating new services or changing Keycloak clients, always verify the audience configuration matches between:
-1. Keycloak client settings (Client ID or Audience mapper)
-2. Envoy JWT authentication configuration (audiences list)
-3. Client token requests (audience parameter in OAuth flow)
-
-### Certificate Hierarchy
-
-**Vault PKI** at vault.odell.com:8200 (external, always required):
-```
-pki-root/ (Root PKI)
-├─ Root CA: CN=odell.com Root CA
-├─ Valid: 2025-12-31 to 2035-12-29 (10 years)
-└─ Signs intermediate CAs
-
-pki-edge/ (Edge Intermediate PKI)
-├─ Intermediate CA: CN=Odell Edge Intermediate CA
-├─ Valid: 2025-12-31 to 2026-12-31 (1 year)
-├─ Role: edge-gateway
-│   ├─ Allowed domains: odell.com (with subdomains)
-│   ├─ Max TTL: 604800s (7 days / 168 hours)
-│   └─ IP SANs: Not allowed
-├─ Issued to: Edge Envoy TLS certificates
-└─ Managed by: edge-vault-agent (AppRole: edge-envoy, Policy: vault-agent)
-
-pki-intermediate/ (Internal Intermediate PKI)
-├─ Intermediate CA: CN=odell.com Intermediate CA
-├─ Valid: 2025-12-31 to 2030-12-30 (5 years)
-├─ Role: internal-services
-│   ├─ Allowed domains: odell.com (with subdomains)
-│   ├─ Max TTL: 2592000s (30 days / 720 hours)
-│   ├─ SPIFFE URIs: spiffe://odell.com/*
-│   └─ Server + Client flags: enabled
-├─ Issued to: Internal Envoy mTLS, Apicurio, backend services
-└─ Managed by: internal-vault-agent (AppRole: internal-envoy, Policy: pki-internal-services)
-           and: envoy-apicurio (AppRole: envoy-apicurio, Policy: pki-internal-services)
-```
-
-**Vault Agent Sidecar Architecture:**
-- **Edge Vault Agent**: Dedicated sidecar container managing Edge TLS certificates only
-  - Uses Edge AppRole credentials: `edge-envoy` → policy `vault-agent`
-  - Access to: `pki-edge/issue/edge-gateway` and `pki-intermediate/issue/internal-services`
-  - Writes to `edge-certs` Docker volume
-  - Auto-renews certificates before expiration (checks every 5 minutes)
-- **Internal Vault Agent**: Dedicated sidecar container managing Internal mTLS + Apicurio certificates
-  - Uses Internal AppRole credentials: `internal-envoy` → policy `pki-internal-services`
-  - Access to: `pki-intermediate/issue/internal-services` only
-  - Writes to `internal-certs` Docker volume
-  - Manages 8 certificate files (5 internal mTLS + 3 Apicurio)
-  - Auto-renews certificates before expiration
-
-**Certificate Rotation:**
-- Edge TLS: Auto-renewed by edge-vault-agent (Vault Agent default: check every 5 minutes)
-- Internal mTLS: Auto-renewed by internal-vault-agent
-- No manual intervention required - Vault Agent handles renewals automatically
-- Each Envoy reads certificates from its dedicated volume (read-only mount)
-
-### Deployment Modes
-
-**Production Mode** (default):
-- Deploys: Edge Envoy, Internal Envoy, Redis
-- Uses external: Vault, Prometheus, Keycloak, OpenTelemetry
-- Command: `docker compose up -d` or `make setup`
-
-**Standalone Mode** (development):
-- Deploys: Core gateway + Keycloak + OTel + Jaeger
-- Still requires external: Vault, Prometheus
-- Command: `docker compose -f docker-compose.yml -f docker-compose.shared.yml up -d` or `make setup-standalone`
 
 ## Development Commands
 
-### Initial Setup (One-Time)
+### Setup
 
 ```bash
-# 1. Setup Vault PKI (requires VAULT_TOKEN)
-export VAULT_TOKEN=<your-vault-admin-token>
-make vault-setup
-
-# 2. Configure environment
+# 1. Copy environment template
 cp .env.example .env
-# Edit .env with AppRole credentials from vault-setup output
 
-# 3. Start gateway (choose mode)
-make setup              # Production mode
-make setup-standalone   # Standalone mode (with local Keycloak/OTel)
+# 2. Edit .env with your Vault credentials
+# VAULT_ROLE_ID=<from-vault-admin>
+# VAULT_SECRET_ID=<from-vault-admin>
+# TLS_DOMAIN=gateway.odell.com
+# TLS_CERT_TTL=168h
+
+# 3. Start services
+make start
 ```
 
-### Service Management
+### Daily Operations
 
 ```bash
-# Start/stop
-make start              # Production mode
-make start-standalone   # Standalone mode
-make stop               # Stop all services
-make restart            # Restart services
+# Start gateway
+make start
 
-# Health and logs
-make health             # Check all service health
-make logs               # All logs (follow mode)
-make logs-edge          # Edge Envoy only
-make logs-internal      # Internal Envoy only
+# Stop gateway
+make stop
 
-# Vault Agent sidecar logs
-docker logs -f edge-vault-agent          # Edge certificate management
-docker logs -f internal-vault-agent      # Internal certificate management
+# View logs
+make logs
 
-# View access logs (JSON formatted)
-tail -f edge/logs/access.log | jq
-tail -f internal/logs/access.log | jq
+# Check health
+make health
+
+# Clean up (stops services and removes volumes)
+make clean
 ```
 
-### Testing
+### Debugging
 
 ```bash
-# Get JWT token from Keycloak
-make dev-token
+# Check if services are running
+docker compose ps
 
-# Make authenticated request
-make dev-request
+# View Vault Agent logs (certificate renewal)
+docker compose logs vault-agent
 
-# Full test
-make test
+# View Envoy logs
+docker compose logs envoy
 
-# Manual test
-TOKEN=$(make -s dev-token)
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost:443/api/simple/
-```
+# Check certificates were fetched
+docker exec vault-agent ls -la /vault/certs/
 
-### Vault Operations
+# View certificate details
+docker exec envoy openssl x509 -in /etc/envoy/certs/tls-server.crt -noout -text
 
-```bash
-# Verify Vault connectivity
-curl -k https://vault.odell.com:8200/v1/sys/health
+# Test health endpoint
+curl -k https://localhost:443/health
 
-# Test AppRole login
-curl -k --request POST \
-  --data '{"role_id":"YOUR_ROLE_ID","secret_id":"YOUR_SECRET_ID"}' \
-  https://vault.odell.com:8200/v1/auth/approle/login
-
-# View policies
-export VAULT_ADDR=https://vault.odell.com:8200
-vault policy read edge-envoy
-vault policy read internal-envoy
-```
-
-### Certificate Operations
-
-```bash
-# View certificates from Vault Agent volumes
-docker exec edge-vault-agent ls -la /vault/certs/
-docker exec internal-vault-agent ls -la /vault/certs/
-
-# View certificates from Envoy containers
-docker exec edge-envoy ls -la /etc/envoy/certs/
-docker exec internal-envoy ls -la /etc/envoy/certs/
-
-# Inspect certificate details
-docker exec edge-envoy openssl x509 -in /etc/envoy/certs/edge-server.crt -noout -text
-docker exec internal-envoy openssl x509 -in /etc/envoy/certs/internal-server.crt -noout -text
-
-# Force certificate renewal (restart Vault Agent sidecars)
-docker compose restart edge-vault-agent internal-vault-agent
-
-# Verify certificate files exist
-docker exec edge-envoy sh -c "ls -la /etc/envoy/certs/ | grep edge-"
-docker exec internal-envoy sh -c "ls -la /etc/envoy/certs/ | grep internal-"
-docker exec internal-envoy sh -c "ls -la /etc/envoy/certs/ | grep apicurio-"
-```
-
-### Envoy Admin Interface
-
-```bash
-# Edge Envoy (port 9901)
+# Check Envoy admin interface
 curl http://localhost:9901/stats
 curl http://localhost:9901/config_dump | jq
-curl http://localhost:9901/clusters
-curl http://localhost:9901/stats/prometheus
-
-# Internal Envoy (port 9902)
-curl http://localhost:9902/stats
-curl http://localhost:9902/config_dump | jq
-curl http://localhost:9902/clusters
-curl http://localhost:9902/stats/prometheus
-```
-
-### Cleanup
-
-```bash
-make clean    # Stop services and clean up volumes/certs
 ```
 
 ## Configuration Files
 
-### Key Envoy Configurations
+### [envoy.yaml](envoy.yaml)
 
-**[edge/envoy.yaml](edge/envoy.yaml)**:
-- TLS termination settings
-- JWT authentication (Keycloak JWKS)
-- JWT claim extraction (Lua filter)
-- Route configuration (public, direct, internal routing)
-- Rate limiting configuration
-- OpenTelemetry tracing
-- Cluster definitions (backends, keycloak, redis, internal-envoy)
+Minimal Envoy configuration:
+- **HTTPS Listener** (port 443):
+  - TLS termination with Vault certificates
+  - Single route: `/health` returns 200 OK
+  - Access logging to stdout
+- **Admin Interface** (port 9901):
+  - Metrics, stats, config dump
+  - Health check endpoint
 
-**[internal/envoy.yaml](internal/envoy.yaml)**:
-- mTLS listener configuration
-- Client certificate validation (currently `require_client_certificate: false`)
-- Route configuration for internal services
-- Cluster definitions for backend services
-- OpenTelemetry tracing
+### [vault-agent.hcl](vault-agent.hcl)
 
-**[edge/config/lua/jwt-claims-extractor.lua](edge/config/lua/jwt-claims-extractor.lua)**:
-- Extracts JWT claims to HTTP headers
-- Headers: X-JWT-Sub, X-JWT-Email, X-JWT-Name, X-JWT-Username, X-JWT-Roles, X-JWT-Groups, X-JWT-Client-Roles, X-JWT-Tenant
-
-### Bootstrap Scripts
-
-**[edge/config/bootstrap/vault-tls-init.sh](edge/config/bootstrap/vault-tls-init.sh)**:
-- Authenticates to Vault via AppRole
-- Fetches TLS certificates from PKI
-- Runs on Edge Envoy container startup
-
-**[internal/config/bootstrap/vault-mtls-init.sh](internal/config/bootstrap/vault-mtls-init.sh)**:
-- Authenticates to Vault via AppRole
-- Fetches mTLS certificates from PKI intermediate
-- Runs on Internal Envoy container startup
-
-**[internal/config/cert-renewal.sh](internal/config/cert-renewal.sh)**:
-- Automatic certificate renewal script
-- Runs periodically to refresh certificates before expiration
-
-## External Dependencies
-
-### Always Required
-
-**Vault** (vault.odell.com:8200):
-- PKI certificate authority
+Vault Agent configuration:
 - AppRole authentication
-- Required for both deployment modes
+- Three certificate templates (inline)
+- Auto-renewal before expiration
+- Environment variable support for `TLS_DOMAIN` and `TLS_CERT_TTL`
 
-**Prometheus** (prometheus.odell.com):
-- Metrics collection from Envoy admin endpoints
-- Configuration: See [infrastructure/prometheus/README.md](infrastructure/prometheus/README.md)
+### [docker-compose.yml](docker-compose.yml)
 
-### Production Mode Uses External
+Two services:
+1. **vault-agent**: Fetches and renews certificates
+2. **envoy**: TLS termination gateway
 
-**Keycloak** (keycloak.odell.com):
-- OAuth 2.0 / OpenID Connect provider
-- JWT token issuance and validation
-- Override with KEYCLOAK_URL in .env
+Single volume:
+- `certs`: Shared between vault-agent (write) and envoy (read-only)
 
-**OpenTelemetry Collector** (otel.odell.com:4317):
-- Distributed tracing aggregation
-- Override with OTEL_EXPORTER_OTLP_ENDPOINT in .env
+### [.env](.env)
 
-## Common Tasks
-
-### Adding New Routes
-
-Edit [edge/envoy.yaml](edge/envoy.yaml) route_config section:
-
-```yaml
-- match:
-    prefix: /api/newservice/
-  route:
-    cluster: new_service_cluster
+Required environment variables:
+```bash
+VAULT_ADDR=https://vault.odell.com:8200
+VAULT_ROLE_ID=<your-role-id>
+VAULT_SECRET_ID=<your-secret-id>
+TLS_DOMAIN=gateway.odell.com
+TLS_CERT_TTL=168h
 ```
 
-Then add the cluster definition in the clusters section.
+## Extending the Gateway
 
-### Adding Backend Services
+This minimal setup can be extended with:
 
-1. Add service to [docker-compose.yml](docker-compose.yml):
+### Adding Backend Routes
 
-```yaml
-new-service:
-  image: your-service:latest
-  networks:
-    - internal-network  # For mTLS routing via internal-envoy
-    # OR
-    - edge-network      # For direct routing from edge-envoy
-```
-
-2. Add cluster to appropriate envoy.yaml:
-   - Edge-direct: [edge/envoy.yaml](edge/envoy.yaml)
-   - Internal (mTLS): [internal/envoy.yaml](internal/envoy.yaml)
-
-### Adding Remote/External Upstreams
-
-Services not in docker-compose can be routed to via Envoy cluster configurations:
+Edit [envoy.yaml](envoy.yaml) to add upstream clusters and routes:
 
 ```yaml
+routes:
+  - match:
+      prefix: "/api/"
+    route:
+      cluster: backend_service
+
 clusters:
-  - name: remote_service
+  - name: backend_service
     connect_timeout: 1s
-    type: STRICT_DNS  # or LOGICAL_DNS
-    dns_lookup_family: V4_ONLY
+    type: STRICT_DNS
     load_assignment:
-      cluster_name: remote_service
+      cluster_name: backend_service
       endpoints:
         - lb_endpoints:
             - endpoint:
                 address:
                   socket_address:
-                    address: remote-host.example.com
+                    address: backend.example.com
                     port_value: 8080
 ```
 
-**IMPORTANT**: The internal-network does NOT have `internal: true` in docker-compose.yml, which allows routing to external hosts.
+### Adding JWT Authentication
 
-### Configuring JWT Audiences
+To add JWT validation (requires Keycloak or OAuth provider):
+1. Add JWT filter to HTTP connection manager
+2. Configure JWKS endpoint
+3. Specify audience requirements
+4. Add authentication rules per route
 
-JWT audiences control which services can accept tokens. This is critical for multi-service architectures.
+### Adding Rate Limiting
 
-**To change or add audiences:**
+To add rate limiting (requires Redis):
+1. Add Redis service to [docker-compose.yml](docker-compose.yml)
+2. Configure rate limit filter in [envoy.yaml](envoy.yaml)
+3. Define rate limit descriptors and actions
 
-1. Edit [edge/envoy.yaml](edge/envoy.yaml) JWT authentication section:
+### Adding Observability
 
-```yaml
-providers:
-  keycloak:
-    issuer: http://keycloak:8080/realms/vytalmind
-    audiences:
-      - edge-gateway      # Existing
-      - new-service-name  # Add new audience
-```
-
-2. Configure corresponding Keycloak client:
-   - Login to Keycloak admin console
-   - Navigate to: Realm → Clients → Select/Create client
-   - Set Client ID to match audience (e.g., `new-service-name`)
-   - OR add Audience mapper:
-     - Client Scopes → Create new scope
-     - Add Mapper → Audience
-     - Included Client Audience: `new-service-name`
-     - Add to access token: ON
-
-3. Test the configuration:
-
-```bash
-# Get token for specific audience (adjust Keycloak client credentials)
-TOKEN=$(curl -s -X POST "http://localhost:8080/realms/vytalmind/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "client_id=new-service-name" \
-  -d "client_secret=YOUR_CLIENT_SECRET" \
-  -d "grant_type=client_credentials" | jq -r '.access_token')
-
-# Verify audience in token
-echo $TOKEN | cut -d. -f2 | base64 -d | jq '.aud'
-
-# Test request
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost:443/api/simple/
-```
-
-4. Restart Edge Envoy to apply changes:
-
-```bash
-docker compose restart edge-envoy
-```
-
-**Common scenarios:**
-
-- **Single service**: Use one audience (current setup)
-- **Multiple gateways**: Add audience per gateway instance
-- **Service migration**: Temporarily allow both old and new audiences
-- **Development vs Production**: Use different audiences per environment
-
-### Modifying JWT Claim Extraction
-
-Edit [edge/config/lua/jwt-claims-extractor.lua](edge/config/lua/jwt-claims-extractor.lua) to extract additional claims from the JWT payload.
-
-After modification, restart Edge Envoy:
-```bash
-docker compose restart edge-envoy
-```
-
-### Changing Certificate TTLs
-
-Edit [.env](.env):
-```env
-TLS_CERT_TTL=8760h  # Edge TLS
-PKI_TTL=720h        # Internal mTLS
-```
-
-Re-run Vault setup and restart services:
-```bash
-make vault-setup
-make restart
-```
-
-## Service Endpoints
-
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Edge Gateway | https://localhost:443 | Main HTTPS entry point |
-| Edge Admin | http://localhost:9901 | Envoy admin/metrics |
-| Edge Vault Agent | (internal) | Certificate management for Edge TLS |
-| Internal Gateway | http://internal-envoy:10000 | Internal mTLS proxy (from containers) |
-| Internal Admin | http://localhost:9902 | Envoy admin/metrics |
-| Internal Vault Agent | (internal) | Certificate management for Internal mTLS + Apicurio |
-| Keycloak (standalone) | http://localhost:8080 | OAuth/JWT provider |
-| Vault (external) | https://vault.odell.com:8200 | PKI and secrets |
-| Prometheus (external) | https://prometheus.odell.com | Metrics collection |
+To add tracing (requires OpenTelemetry Collector):
+1. Add OTel collector service to [docker-compose.yml](docker-compose.yml)
+2. Configure tracing in [envoy.yaml](envoy.yaml)
+3. Add trace decorators to routes
 
 ## Troubleshooting
 
 ### Services Not Starting
 
 ```bash
-# Check container logs
-docker compose logs edge-envoy
-docker compose logs internal-envoy
-docker compose logs edge-vault-agent
-docker compose logs internal-vault-agent
+# Check container status
+docker compose ps
 
-# Verify Vault Agent health
-docker ps | grep vault-agent
-docker compose ps edge-vault-agent internal-vault-agent
+# View all logs
+docker compose logs
 
-# Verify Vault connectivity from Vault Agent containers
-docker exec edge-vault-agent curl -k https://vault.odell.com:8200/v1/sys/health
-docker exec internal-vault-agent curl -k https://vault.odell.com:8200/v1/sys/health
+# Check Vault Agent specifically
+docker compose logs vault-agent
 
-# Check certificates were fetched
-docker exec edge-vault-agent ls -la /vault/certs/
-docker exec internal-vault-agent ls -la /vault/certs/
-docker exec edge-envoy ls -la /etc/envoy/certs/
-docker exec internal-envoy ls -la /etc/envoy/certs/
-```
-
-### JWT Validation Failing
-
-```bash
-# Test Keycloak access from edge-envoy
-docker exec edge-envoy curl http://keycloak:8080/realms/vytalmind/protocol/openid-connect/certs
-
-# View JWT config in Envoy
-curl http://localhost:9901/config_dump | jq '.configs[] | select(.["@type"] | contains("JwtAuthentication"))'
-
-# Decode token to verify claims
-echo $TOKEN | cut -d. -f2 | base64 -d | jq
-
-# Check audience mismatch (common issue)
-echo $TOKEN | cut -d. -f2 | base64 -d | jq '.aud'
-# Should output: "edge-gateway" (or one of configured audiences)
-
-# View configured audiences in Envoy
-curl http://localhost:9901/config_dump | jq '.configs[].dynamic_listeners[].active_state.listener.filter_chains[].filters[].typed_config.http_filters[] | select(.name == "envoy.filters.http.jwt_authn") | .typed_config.providers[].audiences'
-
-# If audience doesn't match, either:
-# 1. Update Keycloak client/mapper to include correct audience
-# 2. Update edge/envoy.yaml audiences list to accept token's audience
+# Verify Vault connectivity
+docker exec vault-agent curl -k https://vault.odell.com:8200/v1/sys/health
 ```
 
 ### Certificate Issues
 
 ```bash
-# Test Vault AppRole credentials
-cat .env | grep VAULT
-
-# Check Vault Agent logs for errors
-docker logs edge-vault-agent
-docker logs internal-vault-agent
-
-# Verify Vault Agent can authenticate
-docker exec edge-vault-agent cat /tmp/vault-token
-docker exec internal-vault-agent cat /tmp/vault-token
-
-# Manually trigger certificate refresh (restart Vault Agent sidecars)
-docker compose restart edge-vault-agent internal-vault-agent
+# Verify certificates exist
+docker exec vault-agent ls -la /vault/certs/
+docker exec envoy ls -la /etc/envoy/certs/
 
 # Check certificate expiration
-docker exec edge-envoy openssl x509 -in /etc/envoy/certs/edge-server.crt -noout -dates
-docker exec internal-envoy openssl x509 -in /etc/envoy/certs/internal-server.crt -noout -dates
+docker exec envoy openssl x509 -in /etc/envoy/certs/tls-server.crt -noout -dates
 
-# Verify certificate files exist in volumes
-docker exec edge-vault-agent ls -la /vault/certs/
-docker exec internal-vault-agent ls -la /vault/certs/
+# Force certificate renewal (restart Vault Agent)
+docker compose restart vault-agent
+
+# Wait for renewal and check logs
+docker compose logs -f vault-agent
 ```
 
-### Routing Issues
+### Connection Issues
 
 ```bash
-# Check cluster health
-curl http://localhost:9901/clusters
+# Test admin interface (should work)
+curl http://localhost:9901/ready
 
-# View route configuration
-curl http://localhost:9901/config_dump | jq '.configs[] | select(.["@type"] | contains("RouteConfiguration"))'
+# Test HTTPS endpoint (might fail if cert domain doesn't match)
+curl -k https://localhost:443/health
 
-# Check upstream connectivity
-docker exec edge-envoy curl http://backend-simple:5678
-docker exec internal-envoy curl http://backend-secure:5678
+# Check if Envoy is listening
+netstat -tlnp | grep envoy
+
+# View Envoy config
+curl http://localhost:9901/config_dump | jq
 ```
 
-## Architecture Notes for Future Work
-
-### GraphQL Gateway Integration
-
-When adding GraphQL Gateway:
-
-1. **Network Configuration**:
-   - GraphQL service must be on BOTH edge-network and internal-network
-   - Similar to edge-envoy bridging both networks
-
-2. **Routing Changes**:
-   - Edge Envoy routes to GraphQL Gateway (not directly to backends)
-   - GraphQL Gateway routes to Internal Envoy
-   - Internal Envoy routes to backends
-
-3. **Expected Traffic Flow**:
-   ```
-   Client → Edge Envoy → GraphQL Gateway → Internal Envoy → Backends
-   ```
-
-4. **Docker Compose Entry**:
-   ```yaml
-   graphql-gateway:
-     image: graphql-service:latest
-     networks:
-       - edge-network     # Receives from edge-envoy
-       - internal-network # Sends to internal-envoy
-   ```
-
-### mTLS Enforcement
-
-Currently `require_client_certificate: false` in [internal/envoy.yaml](internal/envoy.yaml) line 98.
-
-To enable full mTLS:
-1. Set `require_client_certificate: true`
-2. Ensure backend services have Vault-issued certificates
-3. Configure backend services to present client certificates
-4. Update backend service configurations to use mTLS transport sockets
-
-## Environment Variables
-
-Key variables in [.env](.env):
+### Vault Authentication Failures
 
 ```bash
-# Vault AppRole (from vault-setup output)
-EDGE_VAULT_ROLE_ID=...
-EDGE_VAULT_SECRET_ID=...
-INTERNAL_VAULT_ROLE_ID=...
-INTERNAL_VAULT_SECRET_ID=...
+# Verify environment variables are set
+docker compose config | grep VAULT
 
-# External service URLs (production mode)
-KEYCLOAK_URL=https://keycloak.odell.com
-OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.odell.com:4317
+# Check Vault Agent can authenticate
+docker exec vault-agent cat /tmp/vault-token
 
-# Certificate configuration
-TLS_DOMAIN=gateway.vytalmind.local
-TLS_CERT_TTL=8760h
-PKI_TTL=720h
+# If empty, check logs for auth errors
+docker compose logs vault-agent | grep -i error
+
+# Verify AppRole credentials in .env match Vault
 ```
+
+## Service Endpoints
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Gateway (HTTPS) | https://localhost:443 | TLS entry point |
+| Health Endpoint | https://localhost:443/health | Health check |
+| Admin Interface | http://localhost:9901 | Metrics and debugging |
+| Vault (external) | https://vault.odell.com:8200 | PKI and certificates |
+
+## Common Tasks
+
+### Changing Certificate TTL
+
+Edit [.env](.env):
+```bash
+TLS_CERT_TTL=720h  # Change from 168h (7 days) to 720h (30 days)
+```
+
+Restart services:
+```bash
+make stop
+make start
+```
+
+### Changing TLS Domain
+
+Edit [.env](.env):
+```bash
+TLS_DOMAIN=new-gateway.example.com
+```
+
+Restart services:
+```bash
+make stop
+make start
+```
+
+### Viewing Metrics
+
+```bash
+# Prometheus format metrics
+curl http://localhost:9901/stats/prometheus
+
+# JSON stats
+curl http://localhost:9901/stats?format=json | jq
+
+# Specific stat
+curl http://localhost:9901/stats | grep http.ingress_http
+```
+
+## CI/CD Integration
+
+### GitHub Actions Workflows
+
+**[.github/workflows/deploy.yml](.github/workflows/deploy.yml)**:
+- Validates secrets (VAULT_ROLE_ID, VAULT_SECRET_ID)
+- Builds and deploys services
+- Runs health checks
+- Tests HTTPS endpoint
+
+**[.github/workflows/health-check.yml](.github/workflows/health-check.yml)**:
+- Runs every 6 hours
+- Checks Envoy health
+- Monitors certificate expiration
+- Generates health reports
+- Alerts on failures
+
+### Required GitHub Secrets
+
+```bash
+VAULT_ROLE_ID        # Vault AppRole Role ID
+VAULT_SECRET_ID      # Vault AppRole Secret ID
+TLS_DOMAIN           # (optional) Defaults to gateway.odell.com
+TLS_CERT_TTL         # (optional) Defaults to 168h
+```
+
+## Architecture Philosophy
+
+This gateway follows these principles:
+
+1. **Minimalism**: Only essential features (TLS termination)
+2. **Flat Structure**: No subdirectories, everything at root
+3. **Automation**: Vault Agent handles certificates automatically
+4. **Extensibility**: Easy to add features incrementally
+5. **Observability**: Admin interface provides full visibility
+6. **Simplicity**: Single network, two services, clear purpose
+
+## Migration Notes
+
+This is a simplified version of a previous dual-layer architecture (edge + internal Envoy). The consolidation removed:
+- JWT authentication and claims extraction
+- mTLS support
+- Rate limiting
+- OpenTelemetry tracing
+- Multiple networks
+- Backend example services
+- Standalone mode (local Keycloak/OTel)
+
+These features can be re-added as needed by extending the base configuration.
