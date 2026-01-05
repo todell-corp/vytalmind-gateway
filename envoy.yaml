@@ -1,3 +1,7 @@
+node:
+  id: vytalmind-api-gateway
+  cluster: vytalmind-api
+
 static_resources:
   listeners:
     - name: https_listener
