@@ -20,9 +20,9 @@ KEY="${CERT_DIR}/${SERVICE}.key"
 SDS="${CERT_DIR}/${SERVICE}-sds.yaml"
 
 # Extract certificate components from JSON
-jq -r '.certificate'  "$JSON" > "$LEAF"
-jq -r '.issuing_ca'   "$JSON" > "$ISSUING_CA"
-jq -r '.private_key'  "$JSON" > "$KEY"
+jq -r '.certificate' "$JSON" > "$LEAF"
+jq -r '.issuing_ca' "$JSON" > "$ISSUING_CA"
+jq -r '.private_key' "$JSON" > "$KEY"
 
 # Create fullchain (leaf + issuing CA)
 cat "$LEAF" "$ISSUING_CA" > "$FULLCHAIN"
