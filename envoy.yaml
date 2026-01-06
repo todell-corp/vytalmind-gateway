@@ -123,7 +123,7 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
                 tls_certificate_sds_secret_configs:
-                  - name: vytalmind_admin_cert
+                  - name: vytalmind-admin_cert
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-admin-sds.yaml
