@@ -29,7 +29,7 @@ Internet → Envoy (TLS termination) → /health endpoint
 
 ### Vault Agent
 - **Purpose**: Automatic certificate management
-- **Configuration**: [vault-agent.hcl](vault-agent.hcl) in project root
+- **Configuration**: [vault/vault-agent.hcl](vault/vault-agent.hcl)
 - **Vault PKI**: Uses `pki-edge/issue/edge-gateway` role
 - **Certificates Managed**:
   - `tls-server.crt` - Server certificate
@@ -150,7 +150,6 @@ EOF
 ```
 vytalmind-gateway/
 ├── envoy.yaml           # Envoy configuration
-├── vault-agent.hcl      # Vault Agent certificate management
 ├── Dockerfile           # Envoy container image
 ├── docker-compose.yml   # Service orchestration
 ├── .env                 # Environment variables (not in git)
@@ -158,6 +157,9 @@ vytalmind-gateway/
 ├── Makefile             # Common commands
 ├── CLAUDE.md            # This file
 ├── README.md            # User documentation
+├── vault/
+│   ├── vault-agent.hcl  # Vault Agent certificate management
+│   └── policy.hcl       # Vault policy template
 ├── scripts/
 │   ├── render-vault-cert.sh   # Certificate rendering script
 │   └── setup-vault-service.sh # Vault service setup automation
@@ -243,7 +245,7 @@ Minimal Envoy configuration:
   - Metrics, stats, config dump
   - Health check endpoint
 
-### [vault-agent.hcl](vault-agent.hcl)
+### [vault/vault-agent.hcl](vault/vault-agent.hcl)
 
 Vault Agent configuration:
 - AppRole authentication
@@ -470,7 +472,7 @@ TLS_CERT_TTL         # (optional) Defaults to 168h
 This gateway follows these principles:
 
 1. **Minimalism**: Only essential features (TLS termination)
-2. **Flat Structure**: No subdirectories, everything at root
+2. **Simple Structure**: Organized directories for related components
 3. **Automation**: Vault Agent handles certificates automatically
 4. **Extensibility**: Easy to add features incrementally
 5. **Observability**: Admin interface provides full visibility

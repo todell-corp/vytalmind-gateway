@@ -166,7 +166,8 @@ Add OpenTelemetry tracing for distributed request tracking. See [CLAUDE.md](CLAU
 ## Configuration Files
 
 - **[envoy.yaml](envoy.yaml)**: Envoy proxy configuration
-- **[vault-agent.hcl](vault-agent.hcl)**: Vault Agent certificate management
+- **[vault/vault-agent.hcl](vault/vault-agent.hcl)**: Vault Agent certificate management
+- **[vault/policy.hcl](vault/policy.hcl)**: Vault policy template
 - **[docker-compose.yml](docker-compose.yml)**: Service orchestration
 - **[Dockerfile](Dockerfile)**: Envoy container image
 - **[Makefile](Makefile)**: Common commands
