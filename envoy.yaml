@@ -90,6 +90,44 @@ static_resources:
                       path_config_source:
                         path: /etc/envoy/certs/chronos-sds.yaml
                       resource_api_version: V3
+        # VytalMind Admin filter chain with SNI matching
+        - filter_chain_match:
+            server_names: ["vytalmind-admin.odell.com"]
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http_vytalmind_admin
+                codec_type: AUTO
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: vytalmind_admin_route
+                  virtual_hosts:
+                    - name: vytalmind_admin
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: vytalmind_admin_backend
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificate_sds_secret_configs:
+                  - name: vytalmind_admin_cert
+                    sds_config:
+                      path_config_source:
+                        path: /etc/envoy/certs/vytalmind-admin-sds.yaml
+                      resource_api_version: V3
         # Default filter chain for all other domains
         - filters:
             - name: envoy.filters.network.http_connection_manager
@@ -156,6 +194,19 @@ static_resources:
                     socket_address:
                       address: chronos.odell.com
                       port_value: 8080
+    - name: vytalmind_admin_backend
+      connect_timeout: 5s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: vytalmind_admin_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: vytalmind-admin.odell.com
+                      port_value: 3000
 
 admin:
   address:
