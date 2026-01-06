@@ -8,6 +8,11 @@ path "pki-intermediate/issue/keycloak" {
   capabilities = ["create", "update"]
 }
 
+# Allow issuing certificates for chronos
+path "pki-intermediate/issue/chronos" {
+  capabilities = ["create", "update"]
+}
+
 # Allow reading the INTERMEDIATE CA (this was missing)
 path "pki-intermediate/cert/ca" {
   capabilities = ["read"]

@@ -47,7 +47,41 @@ Run the setup script to create the PKI role, policy, and AppRole:
 
 **Note:** The script is idempotent - safe to run multiple times.
 
-### Step 2: Add Vault Agent Template
+### Step 2: Update Vault Policy
+
+Edit [policy.hcl](../policy.hcl) to grant the AppRole permission to issue certificates for the new service.
+
+**Location:** Add after the last service's PKI issue path, before the intermediate CA section.
+
+**Template:**
+```hcl
+# Allow issuing certificates for <service-name>
+path "pki-intermediate/issue/<service-name>" {
+  capabilities = ["create", "update"]
+}
+```
+
+**Example (chronos):**
+```hcl
+# Allow issuing certificates for chronos
+path "pki-intermediate/issue/chronos" {
+  capabilities = ["create", "update"]
+}
+```
+
+**Write the updated policy to Vault:**
+```bash
+vault policy write vault-agent-vytalmind-api-gateway policy.hcl
+```
+
+**Expected output:**
+```
+Success! Uploaded policy: vault-agent-vytalmind-api-gateway
+```
+
+**Note:** The vault-agent will use the new policy on its next token renewal (within 24h) or immediately after restart.
+
+### Step 3: Add Vault Agent Template
 
 Edit [vault-agent.hcl](../vault-agent.hcl) to add a certificate template for the new service.
 
@@ -97,7 +131,7 @@ EOF
 }
 ```
 
-### Step 3: Add Envoy Filter Chain
+### Step 4: Add Envoy Filter Chain
 
 Edit [envoy.yaml](../envoy.yaml) to add an SNI-based filter chain for the new service.
 
@@ -148,7 +182,7 @@ Edit [envoy.yaml](../envoy.yaml) to add an SNI-based filter chain for the new se
 **Example (chronos):**
 See lines 55-92 in [envoy.yaml](../envoy.yaml)
 
-### Step 4: Add Envoy Backend Cluster
+### Step 5: Add Envoy Backend Cluster
 
 Edit [envoy.yaml](../envoy.yaml) to add a backend cluster definition.
 
@@ -188,7 +222,7 @@ Edit [envoy.yaml](../envoy.yaml) to add a backend cluster definition.
                     port_value: 8080
 ```
 
-### Step 5: Deploy Changes
+### Step 6: Deploy Changes
 
 Restart the services to apply the configuration changes:
 
@@ -210,7 +244,7 @@ make start
 3. Envoy starts and loads certificates via SDS
 4. Envoy health check passes
 
-### Step 6: Verify Certificate Fetching
+### Step 7: Verify Certificate Fetching
 
 Check that Vault Agent successfully fetched and rendered certificates:
 
@@ -242,7 +276,7 @@ docker exec vault-agent ls -la /vault/certs/chronos*
 -rw-r--r--    1 vault    vault          456 Jan  5 12:00 chronos-sds.yaml
 ```
 
-### Step 7: Verify Certificate Files in Envoy
+### Step 8: Verify Certificate Files in Envoy
 
 Check that certificates are available in the Envoy container:
 
@@ -257,7 +291,7 @@ docker exec envoy ls -la /etc/envoy/certs/chronos*
 
 **Note:** The `/vault/certs` volume is mounted read-only into Envoy at `/etc/envoy/certs`.
 
-### Step 8: Verify Certificate Details
+### Step 9: Verify Certificate Details
 
 Inspect the certificate to ensure it has the correct domain and expiration:
 
@@ -276,7 +310,7 @@ docker exec envoy openssl x509 -in /etc/envoy/certs/chronos.fullchain.pem -noout
 - Validity dates (should be ~7 days from now with 168h TTL)
 - Issuer: Vault intermediate CA
 
-### Step 9: Test HTTPS Endpoint
+### Step 10: Test HTTPS Endpoint
 
 Test the HTTPS endpoint to verify TLS termination and routing:
 
@@ -295,7 +329,7 @@ curl -k https://chronos.odell.com/
 
 **Expected:** Response from the backend service at port 8080.
 
-### Step 10: Verify SNI Routing
+### Step 11: Verify SNI Routing
 
 Use OpenSSL to verify SNI-based certificate selection:
 
@@ -313,7 +347,7 @@ openssl s_client -connect chronos.odell.com:443 -servername chronos.odell.com < 
 - No certificate errors
 - SSL handshake completes successfully
 
-### Step 11: Check Envoy Metrics
+### Step 12: Check Envoy Metrics
 
 Verify that Envoy is routing traffic through the new filter chain and cluster:
 
@@ -352,7 +386,7 @@ Once configured, certificates are automatically managed:
 
 **Symptoms:**
 - Files missing in `/vault/certs/<service-name>*`
-- Vault Agent logs show errors
+- Vault Agent logs show errors like "permission denied"
 
 **Resolution:**
 ```bash
@@ -362,7 +396,16 @@ docker compose logs vault-agent | grep -i error
 # Common issues:
 # - AppRole authentication failed (check VAULT_ROLE_ID and VAULT_SECRET_ID)
 # - PKI role doesn't exist (re-run setup script)
-# - Policy doesn't grant access (check vault-agent-<service> policy)
+# - Policy doesn't grant access to PKI issue path (check vault-agent-vytalmind-api-gateway policy)
+
+# Verify policy includes the service:
+vault policy read vault-agent-vytalmind-api-gateway | grep "<service-name>"
+
+# If missing, update policy.hcl and write to Vault:
+vault policy write vault-agent-vytalmind-api-gateway policy.hcl
+
+# Restart vault-agent to get new token with updated policy:
+docker compose restart vault-agent
 ```
 
 ### Envoy Not Loading Certificates
@@ -440,6 +483,7 @@ vault delete auth/approle/role/<service-name>
 
 ## Reference Files
 
+- [policy.hcl](../policy.hcl) - Lines 11-14 (chronos PKI issue path)
 - [envoy.yaml](../envoy.yaml) - Lines 55-92 (chronos filter chain), 108-120 (chronos cluster)
 - [vault-agent.hcl](../vault-agent.hcl) - Lines 40-57 (chronos template)
 - [scripts/setup-vault-service.sh](../scripts/setup-vault-service.sh) - Vault setup automation
@@ -448,6 +492,8 @@ vault delete auth/approle/role/<service-name>
 ## Summary Checklist
 
 - [ ] Run setup script: `./scripts/setup-vault-service.sh <service> <fqdn> "localhost" 168h`
+- [ ] Update [policy.hcl](../policy.hcl) to add PKI issue path for new service
+- [ ] Write policy to Vault: `vault policy write vault-agent-vytalmind-api-gateway policy.hcl`
 - [ ] Add Vault Agent template to [vault-agent.hcl](../vault-agent.hcl)
 - [ ] Add filter chain to [envoy.yaml](../envoy.yaml)
 - [ ] Add backend cluster to [envoy.yaml](../envoy.yaml)
