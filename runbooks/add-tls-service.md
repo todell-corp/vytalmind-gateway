@@ -49,7 +49,7 @@ Run the setup script to create the PKI role, policy, and AppRole:
 
 ### Step 2: Update Vault Policy
 
-Edit [policy.hcl](../policy.hcl) to grant the AppRole permission to issue certificates for the new service.
+Edit [vault/policy.hcl](../vault/policy.hcl) to grant the AppRole permission to issue certificates for the new service.
 
 **Location:** Add after the last service's PKI issue path, before the intermediate CA section.
 
@@ -71,7 +71,7 @@ path "pki-intermediate/issue/chronos" {
 
 **Write the updated policy to Vault:**
 ```bash
-vault policy write vault-agent-vytalmind-api-gateway policy.hcl
+vault policy write vault-agent-vytalmind-api-gateway vault/policy.hcl
 ```
 
 **Expected output:**
@@ -83,7 +83,7 @@ Success! Uploaded policy: vault-agent-vytalmind-api-gateway
 
 ### Step 3: Add Vault Agent Template
 
-Edit [vault-agent.hcl](../vault-agent.hcl) to add a certificate template for the new service.
+Edit [vault/vault-agent.hcl](../vault/vault-agent.hcl) to add a certificate template for the new service.
 
 **Location:** Add after the last service template, before the root CA template.
 
@@ -401,8 +401,8 @@ docker compose logs vault-agent | grep -i error
 # Verify policy includes the service:
 vault policy read vault-agent-vytalmind-api-gateway | grep "<service-name>"
 
-# If missing, update policy.hcl and write to Vault:
-vault policy write vault-agent-vytalmind-api-gateway policy.hcl
+# If missing, update vault/policy.hcl and write to Vault:
+vault policy write vault-agent-vytalmind-api-gateway vault/policy.hcl
 
 # Restart vault-agent to get new token with updated policy:
 docker compose restart vault-agent
@@ -467,7 +467,7 @@ If issues occur, rollback the changes:
 
 1. **Remove filter chain** from [envoy.yaml](../envoy.yaml)
 2. **Remove cluster** from [envoy.yaml](../envoy.yaml)
-3. **Remove template** from [vault-agent.hcl](../vault-agent.hcl)
+3. **Remove template** from [vault/vault-agent.hcl](../vault/vault-agent.hcl)
 4. **Restart services:**
    ```bash
    make stop
@@ -483,18 +483,18 @@ vault delete auth/approle/role/<service-name>
 
 ## Reference Files
 
-- [policy.hcl](../policy.hcl) - Lines 11-14 (chronos PKI issue path)
+- [vault/policy.hcl](../vault/policy.hcl) - Lines 11-14 (chronos PKI issue path)
 - [envoy.yaml](../envoy.yaml) - Lines 55-92 (chronos filter chain), 108-120 (chronos cluster)
-- [vault-agent.hcl](../vault-agent.hcl) - Lines 40-57 (chronos template)
+- [vault/vault-agent.hcl](../vault/vault-agent.hcl) - Lines 40-57 (chronos template)
 - [scripts/setup-vault-service.sh](../scripts/setup-vault-service.sh) - Vault setup automation
 - [scripts/render-vault-cert.sh](../scripts/render-vault-cert.sh) - Certificate rendering
 
 ## Summary Checklist
 
 - [ ] Run setup script: `./scripts/setup-vault-service.sh <service> <fqdn> "localhost" 168h`
-- [ ] Update [policy.hcl](../policy.hcl) to add PKI issue path for new service
-- [ ] Write policy to Vault: `vault policy write vault-agent-vytalmind-api-gateway policy.hcl`
-- [ ] Add Vault Agent template to [vault-agent.hcl](../vault-agent.hcl)
+- [ ] Update [vault/policy.hcl](../vault/policy.hcl) to add PKI issue path for new service
+- [ ] Write policy to Vault: `vault policy write vault-agent-vytalmind-api-gateway vault/policy.hcl`
+- [ ] Add Vault Agent template to [vault/vault-agent.hcl](../vault/vault-agent.hcl)
 - [ ] Add filter chain to [envoy.yaml](../envoy.yaml)
 - [ ] Add backend cluster to [envoy.yaml](../envoy.yaml)
 - [ ] Restart services: `make stop && make start`

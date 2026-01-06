@@ -39,7 +39,7 @@ jobs:
       - name: Check required files
         run: |
           test -f envoy.yaml || (echo "❌ envoy.yaml not found" && exit 1)
-          test -f vault-agent.hcl || (echo "❌ vault-agent.hcl not found" && exit 1)
+          test -f vault/vault-agent.hcl || (echo "❌ vault/vault-agent.hcl not found" && exit 1)
           test -f Dockerfile || (echo "❌ Dockerfile not found" && exit 1)
           echo "✅ All required files exist"
 
