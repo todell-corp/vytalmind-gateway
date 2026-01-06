@@ -114,6 +114,41 @@ static_resources:
                           route:
                             cluster: vytalmind_admin_backend
                 http_filters:
+                  - name: envoy.filters.http.oauth2
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.oauth2.v3.OAuth2
+                      config:
+                        token_endpoint:
+                          cluster: keycloak_backend
+                          uri: http://keycloak.odell.com:8880/realms/vytalmind/protocol/openid-connect/token
+                          timeout: 5s
+                        authorization_endpoint: https://keycloak.odell.com/realms/vytalmind/protocol/openid-connect/auth
+                        redirect_uri: "%REQ(:scheme)%://%REQ(:authority)%/callback"
+                        redirect_path_matcher:
+                          path:
+                            exact: "/callback"
+                        signout_path:
+                          path:
+                            exact: "/signout"
+                        forward_bearer_token: true
+                        auth_scopes:
+                          - openid
+                          - email
+                          - profile
+                        credentials:
+                          client_id: vytalmind-admin
+                          token_secret:
+                            name: token
+                            sds_config:
+                              path_config_source:
+                                path: /etc/envoy/secrets/token-secret.yaml
+                              resource_api_version: V3
+                          hmac_secret:
+                            name: hmac
+                            sds_config:
+                              path_config_source:
+                                path: /etc/envoy/secrets/hmac-secret.yaml
+                              resource_api_version: V3
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

@@ -2,6 +2,7 @@ version: '3.8'
 
 volumes:
   certs:  # TLS certificates managed by vault-agent
+  secrets:  # OAuth2 secrets
 
 services:
   # Vault Agent - Manages TLS Certificates
@@ -49,9 +50,22 @@ services:
       - "9901:9901"  # Admin interface
     environment:
       ENVOY_UID: 0
+      OAUTH2_TOKEN_SECRET: ${OAUTH2_TOKEN_SECRET}
+      OAUTH2_HMAC_SECRET: ${OAUTH2_HMAC_SECRET}
     volumes:
       - certs:/etc/envoy/certs:ro
-    command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
+      - secrets:/etc/envoy/secrets
+      - ./secrets:/tmp/templates:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        # Generate OAuth2 secrets from environment variables
+        apk add --no-cache gettext
+        mkdir -p /etc/envoy/secrets
+        envsubst < /tmp/templates/token-secret.yaml.template > /etc/envoy/secrets/token-secret.yaml
+        envsubst < /tmp/templates/hmac-secret.yaml.template > /etc/envoy/secrets/hmac-secret.yaml
+        # Start Envoy
+        exec /usr/local/bin/envoy -c /etc/envoy/envoy.yaml --log-level info
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9901/ready"]
