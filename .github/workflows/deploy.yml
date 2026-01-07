@@ -26,6 +26,8 @@ jobs:
         run: |
           test -n "${{ secrets.VAULT_ROLE_ID }}" || (echo "❌ VAULT_ROLE_ID not set" && exit 1)
           test -n "${{ secrets.VAULT_SECRET_ID }}" || (echo "❌ VAULT_SECRET_ID not set" && exit 1)
+          test -n "${{ secrets.OAUTH2_TOKEN_SECRET }}" || (echo "❌ OAUTH2_TOKEN_SECRET not set" && exit 1)
+          test -n "${{ secrets.OAUTH2_HMAC_SECRET }}" || (echo "❌ OAUTH2_HMAC_SECRET not set" && exit 1)
           echo "✅ All required secrets are configured"
 
       - name: Checkout code
@@ -66,6 +68,8 @@ jobs:
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
           TLS_DOMAIN: ${{ secrets.TLS_DOMAIN || 'vytalmind.odell.com' }}
           TLS_CERT_TTL: ${{ secrets.TLS_CERT_TTL || '168h' }}
+          OAUTH2_TOKEN_SECRET: ${{ secrets.OAUTH2_TOKEN_SECRET }}
+          OAUTH2_HMAC_SECRET: ${{ secrets.OAUTH2_HMAC_SECRET }}
         run: |
           echo "🚀 Starting gateway services..."
           docker compose up -d --build --remove-orphans --force-recreate
