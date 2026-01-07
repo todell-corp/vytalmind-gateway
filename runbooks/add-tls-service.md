@@ -179,6 +179,26 @@ Edit [envoy.yaml](../envoy.yaml) to add an SNI-based filter chain for the new se
                     resource_api_version: V3
 ```
 
+**CRITICAL: SDS Secret Name Convention**
+⚠️ The `name` field MUST match exactly what the render script generates in the SDS file.
+
+The render script creates the secret name as: `<service-name>_cert` where:
+- The service name part uses the SAME format as the filename (with hyphens)
+- An underscore separates the service name from `_cert`
+
+**Examples:**
+- Service: `chronos` → Secret name: `chronos_cert`
+- Service: `vytalmind-admin` → Secret name: `vytalmind-admin_cert` (NOT `vytalmind_admin_cert`)
+- Service: `vytalmind-search` → Secret name: `vytalmind-search_cert` (NOT `vytalmind_search_cert`)
+
+**Common mistake:** Using underscores throughout (e.g., `vytalmind_search_cert`) instead of preserving hyphens in the service name portion.
+
+**How to verify:** After deployment, check the generated SDS file:
+```bash
+docker exec vault-agent cat /vault/certs/<service-name>-sds.yaml
+```
+The `name:` field in that file shows the exact string to use in envoy.yaml.
+
 **Example (chronos):**
 See lines 55-92 in [envoy.yaml](../envoy.yaml)
 
@@ -430,14 +450,25 @@ docker compose restart vault-agent
 **Symptoms:**
 - Envoy fails to start
 - HTTPS requests fail with SSL errors
+- Error in logs: `Unexpected SDS secret (expecting X): Y`
 
 **Resolution:**
 ```bash
-# Check Envoy logs
-docker compose logs envoy | grep -i error
+# Check Envoy logs for SDS secret name mismatch
+docker compose logs envoy | grep -i "Unexpected SDS secret"
 
-# Verify SDS file exists and is valid
-docker exec envoy cat /etc/envoy/certs/<service-name>-sds.yaml
+# Example error:
+# Unexpected SDS secret (expecting vytalmind_search_cert): vytalmind-search_cert
+
+# This means envoy.yaml has the wrong secret name. Fix it to match what's in the SDS file.
+
+# Verify SDS file exists and check the secret name
+docker exec vault-agent cat /etc/envoy/certs/<service-name>-sds.yaml
+
+# The 'name:' field in the SDS file is the EXACT string to use in envoy.yaml
+# Common issue: Multi-word service names (e.g., vytalmind-search)
+#   - SDS file will have: vytalmind-search_cert (hyphen preserved)
+#   - Don't use: vytalmind_search_cert (all underscores) ❌
 
 # Check Envoy config dump
 curl http://localhost:9901/config_dump | jq '.configs[] | select(.["@type"] | contains("Secret"))'
