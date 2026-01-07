@@ -60,7 +60,6 @@ services:
     command:
       - |
         # Generate OAuth2 secrets from environment variables
-        apk add --no-cache gettext
         mkdir -p /etc/envoy/secrets
         envsubst < /tmp/templates/client-secret.yaml.template > /etc/envoy/secrets/client-secret.yaml
         envsubst < /tmp/templates/hmac-secret.yaml.template > /etc/envoy/secrets/hmac-secret.yaml
