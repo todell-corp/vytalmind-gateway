@@ -50,6 +50,7 @@ services:
       - "9901:9901"  # Admin interface
     environment:
       ENVOY_UID: 0
+      OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
       OAUTH2_TOKEN_SECRET: ${OAUTH2_TOKEN_SECRET}
       OAUTH2_HMAC_SECRET: ${OAUTH2_HMAC_SECRET}
     volumes:
@@ -62,6 +63,7 @@ services:
         # Generate OAuth2 secrets from environment variables
         apk add --no-cache gettext
         mkdir -p /etc/envoy/secrets
+        envsubst < /tmp/templates/client-secret.yaml.template > /etc/envoy/secrets/client-secret.yaml
         envsubst < /tmp/templates/token-secret.yaml.template > /etc/envoy/secrets/token-secret.yaml
         envsubst < /tmp/templates/hmac-secret.yaml.template > /etc/envoy/secrets/hmac-secret.yaml
         # Start Envoy

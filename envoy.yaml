@@ -135,8 +135,17 @@ static_resources:
                           - openid
                           - email
                           - profile
+                        # NOTE: PKCE must be disabled in Keycloak client settings
+                        # Keycloak Admin → Clients → vytalmind-admin → Advanced Settings
+                        # Set "Proof Key for Code Exchange Code Challenge Method" to blank/none
                         credentials:
                           client_id: vytalmind-admin
+                          client_secret:
+                            name: client_secret
+                            sds_config:
+                              path_config_source:
+                                path: /etc/envoy/secrets/client-secret.yaml
+                              resource_api_version: V3
                           token_secret:
                             name: token
                             sds_config:
