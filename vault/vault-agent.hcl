@@ -94,6 +94,25 @@ EOF
   command     = "/vault/scripts/render-vault-cert.sh vytalmind-api /vault/certs/vytalmind-api.json"
 }
 
+# Nexus service certificate
+template {
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/nexus"
+   "common_name=nexus.odell.com"
+   "alt_names=localhost"
+   (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
+}
+{{- end -}}
+EOF
+  destination = "/vault/certs/nexus.json"
+  perms       = "0600"
+  command     = "/vault/scripts/render-vault-cert.sh nexus /vault/certs/nexus.json"
+}
+
 # 2) Root CA (trust anchor) — correct endpoint is /cert/ca
 template {
   contents = <<EOF
