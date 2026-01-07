@@ -140,17 +140,11 @@ static_resources:
                         # Set "Proof Key for Code Exchange Code Challenge Method" to blank/none
                         credentials:
                           client_id: vytalmind-admin
-                          client_secret:
+                          token_secret:
                             name: client_secret
                             sds_config:
                               path_config_source:
                                 path: /etc/envoy/secrets/client-secret.yaml
-                              resource_api_version: V3
-                          token_secret:
-                            name: token
-                            sds_config:
-                              path_config_source:
-                                path: /etc/envoy/secrets/token-secret.yaml
                               resource_api_version: V3
                           hmac_secret:
                             name: hmac
