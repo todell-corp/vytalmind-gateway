@@ -332,7 +332,7 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: vytalmind-api.odell.com
+                      address: vytalmind-backend.odell.com
                       port_value: 8083
     - name: nexus_backend
       connect_timeout: 5s
