@@ -222,7 +222,24 @@ Edit [envoy.yaml](../envoy.yaml) to add a backend cluster definition.
                     port_value: 8080
 ```
 
-### Step 6: Deploy Changes
+### Step 6: Commit and Push Changes
+
+Commit the configuration changes to git and push to the remote repository:
+
+```bash
+git add vault/policy.hcl vault/vault-agent.hcl envoy.yaml
+git commit -m "Add TLS service for <service-name>"
+git push
+```
+
+**What this does:**
+- Commits the three configuration files that were modified
+- Pushes changes to remote repository
+- Triggers deployment pipeline (if configured)
+
+**Note:** The deployment must pull these changes before the services can use the new configuration.
+
+### Step 7: Deploy Changes
 
 Restart the services to apply the configuration changes:
 
@@ -244,7 +261,7 @@ make start
 3. Envoy starts and loads certificates via SDS
 4. Envoy health check passes
 
-### Step 7: Verify Certificate Fetching
+### Step 8: Verify Certificate Fetching
 
 Check that Vault Agent successfully fetched and rendered certificates:
 
@@ -276,7 +293,7 @@ docker exec vault-agent ls -la /vault/certs/chronos*
 -rw-r--r--    1 vault    vault          456 Jan  5 12:00 chronos-sds.yaml
 ```
 
-### Step 8: Verify Certificate Files in Envoy
+### Step 9: Verify Certificate Files in Envoy
 
 Check that certificates are available in the Envoy container:
 
@@ -291,7 +308,7 @@ docker exec envoy ls -la /etc/envoy/certs/chronos*
 
 **Note:** The `/vault/certs` volume is mounted read-only into Envoy at `/etc/envoy/certs`.
 
-### Step 9: Verify Certificate Details
+### Step 10: Verify Certificate Details
 
 Inspect the certificate to ensure it has the correct domain and expiration:
 
@@ -310,7 +327,7 @@ docker exec envoy openssl x509 -in /etc/envoy/certs/chronos.fullchain.pem -noout
 - Validity dates (should be ~7 days from now with 168h TTL)
 - Issuer: Vault intermediate CA
 
-### Step 10: Test HTTPS Endpoint
+### Step 11: Test HTTPS Endpoint
 
 Test the HTTPS endpoint to verify TLS termination and routing:
 
@@ -329,7 +346,7 @@ curl -k https://chronos.odell.com/
 
 **Expected:** Response from the backend service at port 8080.
 
-### Step 11: Verify SNI Routing
+### Step 12: Verify SNI Routing
 
 Use OpenSSL to verify SNI-based certificate selection:
 
@@ -347,7 +364,7 @@ openssl s_client -connect chronos.odell.com:443 -servername chronos.odell.com < 
 - No certificate errors
 - SSL handshake completes successfully
 
-### Step 12: Check Envoy Metrics
+### Step 13: Check Envoy Metrics
 
 Verify that Envoy is routing traffic through the new filter chain and cluster:
 
@@ -497,6 +514,7 @@ vault delete auth/approle/role/<service-name>
 - [ ] Add Vault Agent template to [vault/vault-agent.hcl](../vault/vault-agent.hcl)
 - [ ] Add filter chain to [envoy.yaml](../envoy.yaml)
 - [ ] Add backend cluster to [envoy.yaml](../envoy.yaml)
+- [ ] Commit and push changes: `git add vault/policy.hcl vault/vault-agent.hcl envoy.yaml && git commit -m "Add TLS service for <service-name>" && git push`
 - [ ] Restart services: `make stop && make start`
 - [ ] Verify certificates: `docker exec vault-agent ls -la /vault/certs/<service>*`
 - [ ] Test HTTPS: `curl -k https://<fqdn>/`
