@@ -33,6 +33,11 @@ path "pki-intermediate/issue/vytalmind-search" {
   capabilities = ["create", "update"]
 }
 
+# Allow issuing certificates for vytalmind-identity
+path "pki-intermediate/issue/vytalmind-identity" {
+  capabilities = ["create", "update"]
+}
+
 # Allow reading the INTERMEDIATE CA (this was missing)
 path "pki-intermediate/cert/ca" {
   capabilities = ["read"]

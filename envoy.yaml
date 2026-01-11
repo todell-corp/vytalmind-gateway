@@ -152,6 +152,35 @@ static_resources:
                               path_config_source:
                                 path: /etc/envoy/secrets/hmac-secret.yaml
                               resource_api_version: V3
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      providers:
+                        keycloak:
+                          issuer: https://keycloak.odell.com/realms/vytalmind
+                          remote_jwks:
+                            http_uri:
+                              uri: https://keycloak.odell.com/realms/vytalmind/protocol/openid-connect/certs
+                              cluster: keycloak_backend
+                              timeout: 5s
+                            cache_duration:
+                              seconds: 300
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          forward: true
+                          claim_to_headers:
+                            - header_name: x-user-id
+                              claim_name: sub
+                            - header_name: x-user-email
+                              claim_name: email
+                            - header_name: x-realm-roles
+                              claim_name: realm_access.roles
+                      rules:
+                        - match:
+                            prefix: "/"
+                          requires:
+                            provider_name: keycloak
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -280,6 +309,44 @@ static_resources:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-search-sds.yaml
                       resource_api_version: V3
+        # VytalMind Identity filter chain with SNI matching
+        - filter_chain_match:
+            server_names: ["vytalmind-identity.odell.com"]
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http_vytalmind_identity
+                codec_type: AUTO
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: vytalmind_identity_route
+                  virtual_hosts:
+                    - name: vytalmind_identity
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: vytalmind_identity_backend
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificate_sds_secret_configs:
+                  - name: vytalmind-identity_cert
+                    sds_config:
+                      path_config_source:
+                        path: /etc/envoy/certs/vytalmind-identity-sds.yaml
+                      resource_api_version: V3
         # Default filter chain for all other domains
         - filters:
             - name: envoy.filters.network.http_connection_manager
@@ -398,6 +465,19 @@ static_resources:
                     socket_address:
                       address: search-api.odell.com
                       port_value: 8000
+    - name: vytalmind_identity_backend
+      connect_timeout: 5s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: vytalmind_identity_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: vytalmind-identity.odell.com
+                      port_value: 8080
 
 admin:
   address:
