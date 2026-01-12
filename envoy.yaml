@@ -219,6 +219,35 @@ static_resources:
                           route:
                             cluster: vytalmind_api_backend
                 http_filters:
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      providers:
+                        keycloak:
+                          issuer: https://keycloak.odell.com/realms/vytalmind
+                          remote_jwks:
+                            http_uri:
+                              uri: https://keycloak.odell.com/realms/vytalmind/protocol/openid-connect/certs
+                              cluster: keycloak_backend
+                              timeout: 5s
+                            cache_duration:
+                              seconds: 300
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          forward: true
+                          claim_to_headers:
+                            - header_name: x-user-id
+                              claim_name: sub
+                            - header_name: x-user-email
+                              claim_name: email
+                            - header_name: x-realm-roles
+                              claim_name: realm_access.roles
+                      rules:
+                        - match:
+                            prefix: "/"
+                          requires:
+                            provider_name: keycloak
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
