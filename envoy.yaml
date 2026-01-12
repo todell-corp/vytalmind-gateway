@@ -238,7 +238,7 @@ static_resources:
                           forward: true
                           claim_to_headers:
                             - header_name: x-user-id
-                              claim_name: sub
+                              claim_name: vytalmind_user_id
                             - header_name: x-user-email
                               claim_name: email
                             - header_name: x-realm-roles
