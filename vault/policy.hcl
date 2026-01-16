@@ -43,6 +43,11 @@ path "pki-intermediate/issue/langfuse" {
   capabilities = ["create", "update"]
 }
 
+# Allow issuing certificates for vytalmind-graphql
+path "pki-intermediate/issue/vytalmind-graphql" {
+  capabilities = ["create", "update"]
+}
+
 # Allow reading the INTERMEDIATE CA (this was missing)
 path "pki-intermediate/cert/ca" {
   capabilities = ["read"]
