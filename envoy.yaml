@@ -600,7 +600,7 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: vytalmind-backend.odell.com
+                      address: vytalmind-api.odell.com
                       port_value: 8083
     - name: nexus_backend
       connect_timeout: 5s
@@ -626,7 +626,7 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: search-api.odell.com
+                      address: vytalmind-search.odell.com
                       port_value: 8000
     - name: vytalmind_identity_backend
       connect_timeout: 5s
