@@ -8,8 +8,8 @@ path "pki-intermediate/issue/keycloak" {
   capabilities = ["create", "update"]
 }
 
-# Allow issuing certificates for chronos
-path "pki-intermediate/issue/chronos" {
+# Allow issuing certificates for vytalmind-chronos
+path "pki-intermediate/issue/vytalmind-chronos" {
   capabilities = ["create", "update"]
 }
 
