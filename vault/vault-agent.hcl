@@ -37,11 +37,11 @@ EOF
   command     = "/vault/scripts/render-vault-cert.sh keycloak /vault/certs/keycloak.json"
 }
 
-# Chronos service certificate
+# VytalMind Chronos service certificate
 template {
   contents = <<EOF
-{{- with secret "pki-intermediate/issue/chronos"
-   "common_name=chronos.odell.com"
+{{- with secret "pki-intermediate/issue/vytalmind-chronos"
+   "common_name=vytalmind-chronos.odell.com"
    "alt_names=localhost"
    (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
 {
@@ -51,9 +51,9 @@ template {
 }
 {{- end -}}
 EOF
-  destination = "/vault/certs/chronos.json"
+  destination = "/vault/certs/vytalmind-chronos.json"
   perms       = "0600"
-  command     = "/vault/scripts/render-vault-cert.sh chronos /vault/certs/chronos.json"
+  command     = "/vault/scripts/render-vault-cert.sh vytalmind-chronos /vault/certs/vytalmind-chronos.json"
 }
 
 # VytalMind Admin service certificate
