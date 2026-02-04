@@ -271,7 +271,7 @@ static_resources:
                             - header_name: x-user-email
                               claim_name: email
                             - header_name: x-realm-roles
-                              claim_name: resource_access.vytalmind-api.roles
+                              claim_name: realm_access.roles
                       rules:
                         - match:
                             prefix: "/"
