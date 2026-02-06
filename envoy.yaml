@@ -98,6 +98,8 @@ static_resources:
                               claim_name: vytalmind_user_id
                             - header_name: x-user-email
                               claim_name: email
+                            - header_name: x-permissions
+                              claim_name: resource_access.vytalmind-chronos.roles
                             - header_name: x-realm-roles
                               claim_name: realm_access.roles
                       rules:
@@ -203,6 +205,8 @@ static_resources:
                               claim_name: sub
                             - header_name: x-user-email
                               claim_name: email
+                            - header_name: x-permissions
+                              claim_name: resource_access.vytalmind-admin.roles
                             - header_name: x-realm-roles
                               claim_name: realm_access.roles
                       rules:
@@ -270,6 +274,8 @@ static_resources:
                               claim_name: vytalmind_user_id
                             - header_name: x-user-email
                               claim_name: email
+                            - header_name: x-permissions
+                              claim_name: resource_access.vytalmind-api.roles
                             - header_name: x-realm-roles
                               claim_name: realm_access.roles
                       rules:
@@ -375,8 +381,10 @@ static_resources:
                               claim_name: vytalmind_user_id
                             - header_name: x-user-email
                               claim_name: email
-                            - header_name: x-realm-roles
+                            - header_name: x-permissions
                               claim_name: resource_access.vytalmind-search.roles
+                            - header_name: x-realm-roles
+                              claim_name: realm_access.roles
                       rules:
                         - match:
                             prefix: "/"
@@ -518,8 +526,10 @@ static_resources:
                               claim_name: vytalmind_user_id
                             - header_name: x-user-email
                               claim_name: email
-                            - header_name: x-realm-roles
+                            - header_name: x-permissions
                               claim_name: resource_access.vytalmind-graphql.roles
+                            - header_name: x-realm-roles
+                              claim_name: realm_access.roles
                       rules:
                         - match:
                             prefix: "/"
