@@ -208,6 +208,44 @@ EOF
   command     = "/vault/scripts/render-vault-cert.sh ventusmind-codec /vault/certs/ventusmind-codec.json"
 }
 
+# Internal VytalMind Search service certificate
+template {
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/internal-vytalmind-search"
+   "common_name=internal.vytalmind-search.odell.com"
+   "alt_names=localhost"
+   (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
+}
+{{- end -}}
+EOF
+  destination = "/vault/certs/internal-vytalmind-search.json"
+  perms       = "0600"
+  command     = "/vault/scripts/render-vault-cert.sh internal-vytalmind-search /vault/certs/internal-vytalmind-search.json"
+}
+
+# Internal VytalMind API service certificate
+template {
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/internal-vytalmind-api"
+   "common_name=internal.vytalmind-api.odell.com"
+   "alt_names=localhost"
+   (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
+}
+{{- end -}}
+EOF
+  destination = "/vault/certs/internal-vytalmind-api.json"
+  perms       = "0600"
+  command     = "/vault/scripts/render-vault-cert.sh internal-vytalmind-api /vault/certs/internal-vytalmind-api.json"
+}
+
 # 2) Root CA (trust anchor) — correct endpoint is /cert/ca
 template {
   contents = <<EOF

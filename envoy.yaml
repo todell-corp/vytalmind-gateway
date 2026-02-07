@@ -587,6 +587,104 @@ static_resources:
                       path_config_source:
                         path: /etc/envoy/certs/ventusmind-codec-sds.yaml
                       resource_api_version: V3
+        # Internal VytalMind Search filter chain with SNI matching (service account access)
+        - filter_chain_match:
+            server_names: ["internal.vytalmind-search.odell.com"]
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http_internal_vytalmind_search
+                codec_type: AUTO
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: internal_vytalmind_search_route
+                  virtual_hosts:
+                    - name: internal_vytalmind_search
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: vytalmind_search_backend
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificate_sds_secret_configs:
+                  - name: internal-vytalmind-search_cert
+                    sds_config:
+                      path_config_source:
+                        path: /etc/envoy/certs/internal-vytalmind-search-sds.yaml
+                      resource_api_version: V3
+        # Internal VytalMind API filter chain with SNI matching (service account access)
+        - filter_chain_match:
+            server_names: ["internal.vytalmind-api.odell.com"]
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http_internal_vytalmind_api
+                codec_type: AUTO
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: internal_vytalmind_api_route
+                  virtual_hosts:
+                    - name: internal_vytalmind_api
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: vytalmind_api_backend
+                http_filters:
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      providers:
+                        keycloak:
+                          issuer: https://keycloak.odell.com/realms/vytalmind
+                          remote_jwks:
+                            http_uri:
+                              uri: https://keycloak.odell.com/realms/vytalmind/protocol/openid-connect/certs
+                              cluster: keycloak_backend
+                              timeout: 5s
+                            cache_duration:
+                              seconds: 300
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          forward: true
+                      rules:
+                        - match:
+                            prefix: "/"
+                          requires:
+                            provider_name: keycloak
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificate_sds_secret_configs:
+                  - name: internal-vytalmind-api_cert
+                    sds_config:
+                      path_config_source:
+                        path: /etc/envoy/certs/internal-vytalmind-api-sds.yaml
+                      resource_api_version: V3
         # Default filter chain for all other domains
         - filters:
             - name: envoy.filters.network.http_connection_manager
