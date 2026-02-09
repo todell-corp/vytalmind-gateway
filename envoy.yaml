@@ -750,7 +750,7 @@ static_resources:
                   address:
                     socket_address:
                       address: vytalmind-chronos.odell.com
-                      port_value: 9090
+                      port_value: 8080
     - name: vytalmind_admin_backend
       connect_timeout: 5s
       type: STRICT_DNS
