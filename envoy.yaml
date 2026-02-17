@@ -51,6 +51,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/keycloak-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VytalMind Chronos filter chain with SNI matching
         - filter_chain_match:
@@ -120,6 +122,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-chronos-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VytalMind Admin filter chain with SNI matching
         - filter_chain_match:
@@ -176,12 +180,16 @@ static_resources:
                             sds_config:
                               path_config_source:
                                 path: /etc/envoy/secrets/client-secret.yaml
+                                watched_directory:
+                                  path: /etc/envoy/secrets
                               resource_api_version: V3
                           hmac_secret:
                             name: hmac
                             sds_config:
                               path_config_source:
                                 path: /etc/envoy/secrets/hmac-secret.yaml
+                                watched_directory:
+                                  path: /etc/envoy/secrets
                               resource_api_version: V3
                   - name: envoy.filters.http.jwt_authn
                     typed_config:
@@ -227,6 +235,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-admin-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VytalMind API filter chain with SNI matching
         - filter_chain_match:
@@ -296,6 +306,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-api-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # Nexus filter chain with SNI matching
         - filter_chain_match:
@@ -334,6 +346,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/nexus-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VytalMind Search filter chain with SNI matching
         - filter_chain_match:
@@ -403,6 +417,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-search-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VytalMind Identity filter chain with SNI matching
         - filter_chain_match:
@@ -441,6 +457,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-identity-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # Langfuse filter chain with SNI matching
         - filter_chain_match:
@@ -479,6 +497,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/langfuse-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VytalMind GraphQL filter chain with SNI matching
         - filter_chain_match:
@@ -548,6 +568,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/vytalmind-graphql-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # VentusMind Codec filter chain with SNI matching
         - filter_chain_match:
@@ -586,6 +608,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/ventusmind-codec-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # Internal VytalMind Search filter chain with SNI matching (service account access)
         - filter_chain_match:
@@ -624,6 +648,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/internal-vytalmind-search-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # Internal VytalMind API filter chain with SNI matching (service account access)
         - filter_chain_match:
@@ -684,6 +710,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/internal-vytalmind-api-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
         # Default filter chain for all other domains
         - filters:
@@ -722,6 +750,8 @@ static_resources:
                     sds_config:
                       path_config_source:
                         path: /etc/envoy/certs/keycloak-sds.yaml
+                        watched_directory:
+                          path: /etc/envoy/certs
                       resource_api_version: V3
 
   clusters:

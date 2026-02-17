@@ -19,20 +19,21 @@ FULLCHAIN="${CERT_DIR}/${SERVICE}.fullchain.pem"
 KEY="${CERT_DIR}/${SERVICE}.key"
 SDS="${CERT_DIR}/${SERVICE}-sds.yaml"
 
-# Extract certificate components from JSON
-jq -r '.certificate' "$JSON" > "$LEAF"
-jq -r '.issuing_ca' "$JSON" > "$ISSUING_CA"
-jq -r '.private_key' "$JSON" > "$KEY"
+# Extract certificate components from JSON using atomic writes (temp + mv)
+# This ensures Envoy's inotify/directory watcher fires correctly on Docker overlay fs
+jq -r '.certificate' "$JSON" > "${LEAF}.tmp" && mv "${LEAF}.tmp" "$LEAF"
+jq -r '.issuing_ca' "$JSON" > "${ISSUING_CA}.tmp" && mv "${ISSUING_CA}.tmp" "$ISSUING_CA"
+jq -r '.private_key' "$JSON" > "${KEY}.tmp"
+chmod 600 "${KEY}.tmp"
+mv "${KEY}.tmp" "$KEY"
 
-# Create fullchain (leaf + issuing CA)
-cat "$LEAF" "$ISSUING_CA" > "$FULLCHAIN"
-
-# Secure private key
-chmod 600 "$KEY"
+# Create fullchain (leaf + issuing CA) atomically
+cat "$LEAF" "$ISSUING_CA" > "${FULLCHAIN}.tmp" && mv "${FULLCHAIN}.tmp" "$FULLCHAIN"
 
 # Create SDS configuration for Envoy automatic cert reload
 # Note: Paths must be from Envoy's perspective (/etc/envoy/certs)
-cat > "$SDS" <<EOF
+# Atomic write ensures Envoy's watched_directory sees IN_MOVED_TO event
+cat > "${SDS}.tmp" <<EOF
 resources:
   - "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.Secret
     name: ${SERVICE}_cert
@@ -42,6 +43,7 @@ resources:
       private_key:
         filename: /etc/envoy/certs/${SERVICE}.key
 EOF
+mv "${SDS}.tmp" "$SDS"
 
 echo "[vault-agent] Rendered certs for $SERVICE"
 
