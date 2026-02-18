@@ -246,6 +246,25 @@ EOF
   command     = "/vault/scripts/render-vault-cert.sh internal-vytalmind-api /vault/certs/internal-vytalmind-api.json"
 }
 
+# pgAdmin service certificate
+template {
+  contents = <<EOF
+{{- with secret "pki-intermediate/issue/pgadmin"
+   "common_name=pgadmin.odell.com"
+   "alt_names=localhost"
+   (printf "ttl=%s" (env "TLS_CERT_TTL")) -}}
+{
+  "certificate": {{ .Data.certificate | toJSON }},
+  "issuing_ca":  {{ .Data.issuing_ca  | toJSON }},
+  "private_key": {{ .Data.private_key | toJSON }}
+}
+{{- end -}}
+EOF
+  destination = "/vault/certs/pgadmin.json"
+  perms       = "0600"
+  command     = "/vault/scripts/render-vault-cert.sh pgadmin /vault/certs/pgadmin.json"
+}
+
 # 2) Root CA (trust anchor) — correct endpoint is /cert/ca
 template {
   contents = <<EOF
